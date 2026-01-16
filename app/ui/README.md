@@ -1,0 +1,1 @@
+A NextJS Application allowing admins to upload documents, and logged-in public users to view and search documents.
