@@ -3,6 +3,11 @@ variable "subscription_id" {
 }
 
 variable "location" {
-  type = "string"
-  default = "useast2"
+  type = string
+  default = "eastus2"
+}
+
+variable "environment" {
+  type = string
+  default = "dev"
 }

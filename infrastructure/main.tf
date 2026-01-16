@@ -1,0 +1,144 @@
+locals {
+  workload = "techpubsai"
+}
+
+resource "azurerm_resource_group" "main" {
+  name     = "rg-${local.workload}-${var.environment}"
+  location = var.location
+}
+
+resource "random_string" "unique" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+resource "azurerm_storage_account" "main" {
+  name                     = "sa${local.workload}${random_string.unique.result}"
+  location                 = azurerm_resource_group.main.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  resource_group_name      = azurerm_resource_group.main.name
+}
+
+resource "azurerm_storage_container" "documents" {
+  name               = "documents"
+  storage_account_id = azurerm_storage_account.main.id
+}
+
+# Container Registry for storing the document ingestion job image
+resource "azurerm_container_registry" "main" {
+  name                = "cr${local.workload}${random_string.unique.result}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Basic"
+  admin_enabled       = true
+}
+
+# Log Analytics Workspace for Container Apps Environment
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "log-${local.workload}-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+
+# Container Apps Environment
+resource "azurerm_container_app_environment" "main" {
+  name                       = "cae-${local.workload}-${var.environment}"
+  resource_group_name        = azurerm_resource_group.main.name
+  location                   = azurerm_resource_group.main.location
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+}
+
+# User Assigned Identity for the Container App Job
+resource "azurerm_user_assigned_identity" "document_ingestion" {
+  name                = "id-document-ingestion-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
+
+# Grant the identity access to read blobs from storage
+resource "azurerm_role_assignment" "document_ingestion_blob_reader" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
+}
+
+# Grant the identity access to pull images from ACR
+resource "azurerm_role_assignment" "document_ingestion_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
+}
+
+# Container App Job for document ingestion (event-driven)
+resource "azurerm_container_app_job" "document_ingestion" {
+  name                         = "caj-document-ingestion-${var.environment}"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  container_app_environment_id = azurerm_container_app_environment.main.id
+
+  replica_timeout_in_seconds = 300
+  replica_retry_limit        = 1
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
+  }
+
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.document_ingestion.id
+  }
+
+  event_trigger_config {
+    parallelism              = 1
+    replica_completion_count = 1
+
+    scale {
+      min_executions              = 0
+      max_executions              = 10
+      polling_interval_in_seconds = 30
+
+      rules {
+        name             = "blob-trigger"
+        custom_rule_type = "azure-blob"
+        metadata = {
+          blobContainerName = azurerm_storage_container.documents.name
+          accountName       = azurerm_storage_account.main.name
+        }
+        authentication {
+          secret_name       = "storage-connection-string"
+          trigger_parameter = "connection"
+        }
+      }
+    }
+  }
+
+  secret {
+    name  = "storage-connection-string"
+    value = azurerm_storage_account.main.primary_connection_string
+  }
+
+  template {
+    container {
+      name   = "document-ingestion"
+      image  = "${azurerm_container_registry.main.login_server}/document-ingestion:latest"
+      cpu    = 0.5
+      memory = "1Gi"
+
+      env {
+        name  = "STORAGE_ACCOUNT_URL"
+        value = azurerm_storage_account.main.primary_blob_endpoint
+      }
+    }
+  }
+
+  depends_on = [
+    azurerm_role_assignment.document_ingestion_acr_pull,
+    azurerm_role_assignment.document_ingestion_blob_reader
+  ]
+}
+
