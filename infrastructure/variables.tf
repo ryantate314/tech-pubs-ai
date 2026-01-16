@@ -11,3 +11,9 @@ variable "environment" {
   type = string
   default = "dev"
 }
+
+variable "database_url" {
+  type        = string
+  description = "PostgreSQL connection string for the document database"
+  sensitive   = true
+}

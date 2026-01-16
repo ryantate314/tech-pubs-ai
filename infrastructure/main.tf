@@ -26,6 +26,12 @@ resource "azurerm_storage_container" "documents" {
   storage_account_id = azurerm_storage_account.main.id
 }
 
+# Storage Queue for document ingestion jobs
+resource "azurerm_storage_queue" "document_ingestion" {
+  name                 = "document-ingestion"
+  storage_account_name = azurerm_storage_account.main.name
+}
+
 # Container Registry for storing the document ingestion job image
 resource "azurerm_container_registry" "main" {
   name                = "cr${local.workload}${random_string.unique.result}"
@@ -66,6 +72,34 @@ resource "azurerm_role_assignment" "document_ingestion_blob_reader" {
   principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
 }
 
+# Grant the identity access to process queue messages
+resource "azurerm_role_assignment" "document_ingestion_queue_processor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Queue Data Message Processor"
+  principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
+}
+
+# User Assigned Identity for the API (to send queue messages and upload blobs)
+resource "azurerm_user_assigned_identity" "api" {
+  name                = "id-api-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
+
+# Grant the API identity access to write blobs to storage
+resource "azurerm_role_assignment" "api_blob_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.api.principal_id
+}
+
+# Grant the API identity access to send queue messages
+resource "azurerm_role_assignment" "api_queue_sender" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Queue Data Message Sender"
+  principal_id         = azurerm_user_assigned_identity.api.principal_id
+}
+
 # Grant the identity access to pull images from ACR
 resource "azurerm_role_assignment" "document_ingestion_acr_pull" {
   scope                = azurerm_container_registry.main.id
@@ -103,11 +137,11 @@ resource "azurerm_container_app_job" "document_ingestion" {
       polling_interval_in_seconds = 30
 
       rules {
-        name             = "blob-trigger"
-        custom_rule_type = "azure-blob"
+        name             = "queue-trigger"
+        custom_rule_type = "azure-queue"
         metadata = {
-          blobContainerName = azurerm_storage_container.documents.name
-          accountName       = azurerm_storage_account.main.name
+          queueName   = azurerm_storage_queue.document_ingestion.name
+          accountName = azurerm_storage_account.main.name
         }
         authentication {
           secret_name       = "storage-connection-string"
@@ -122,6 +156,11 @@ resource "azurerm_container_app_job" "document_ingestion" {
     value = azurerm_storage_account.main.primary_connection_string
   }
 
+  secret {
+    name  = "database-url"
+    value = var.database_url
+  }
+
   template {
     container {
       name   = "document-ingestion"
@@ -133,12 +172,28 @@ resource "azurerm_container_app_job" "document_ingestion" {
         name  = "STORAGE_ACCOUNT_URL"
         value = azurerm_storage_account.main.primary_blob_endpoint
       }
+
+      env {
+        name  = "STORAGE_QUEUE_URL"
+        value = azurerm_storage_account.main.primary_queue_endpoint
+      }
+
+      env {
+        name  = "QUEUE_NAME"
+        value = azurerm_storage_queue.document_ingestion.name
+      }
+
+      env {
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
+      }
     }
   }
 
   depends_on = [
     azurerm_role_assignment.document_ingestion_acr_pull,
-    azurerm_role_assignment.document_ingestion_blob_reader
+    azurerm_role_assignment.document_ingestion_blob_reader,
+    azurerm_role_assignment.document_ingestion_queue_processor
   ]
 }
 

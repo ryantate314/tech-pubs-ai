@@ -1,0 +1,23 @@
+[project]
+name = "techpubs-core"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ryan Tate", email = "ryan.tate@cirrusaircraft.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pgvector>=0.3.0",
+    "psycopg[binary]>=3.0",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[project.optional-dependencies]
+embeddings = [
+    "sentence-transformers>=3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
