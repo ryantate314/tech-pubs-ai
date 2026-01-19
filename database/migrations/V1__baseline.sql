@@ -1,7 +1,24 @@
+-- Baseline migration: Combined schema from initial migrations
+-- This represents the complete database schema as of the Flyway integration
+
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Categories table (created first since documents reference it)
+-- Aircraft models lookup table
+CREATE TABLE aircraft_models (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(20) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed aircraft models
+INSERT INTO aircraft_models (code, name) VALUES
+    ('sr22', 'SR22'),
+    ('sr20', 'SR20'),
+    ('sf50', 'SF50');
+
+-- Categories table
 CREATE TABLE categories (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -16,6 +33,7 @@ CREATE TABLE documents (
     guid UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     category_id BIGINT REFERENCES categories(id),
+    aircraft_model_id BIGINT REFERENCES aircraft_models(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
@@ -30,6 +48,7 @@ CREATE TABLE document_versions (
     document_id BIGINT NOT NULL REFERENCES documents(id),
     content_type VARCHAR(50),
     file_size BIGINT,
+    blob_path VARCHAR(1024),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
@@ -39,8 +58,8 @@ CREATE TABLE document_versions (
 CREATE TABLE document_jobs (
     id BIGSERIAL PRIMARY KEY,
     document_version_id BIGINT NOT NULL REFERENCES document_versions(id),
-    job_type VARCHAR(50) NOT NULL,  -- 'text_extraction', 'embedding', 'thumbnail', etc.
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending, running, completed, failed
+    job_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
     error_message TEXT,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
@@ -54,7 +73,7 @@ CREATE TABLE document_chunks (
     document_version_id BIGINT NOT NULL REFERENCES document_versions(id),
     chunk_index INT NOT NULL,
     content TEXT NOT NULL,
-    embedding vector(768),  -- BAAI/bge-base-en-v1.5 dimension
+    embedding vector(768),
     token_count INT,
     page_number INT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -63,6 +82,7 @@ CREATE TABLE document_chunks (
 -- Indexes for common queries
 CREATE INDEX idx_documents_category ON documents(category_id);
 CREATE INDEX idx_documents_guid ON documents(guid);
+CREATE INDEX idx_documents_aircraft_model ON documents(aircraft_model_id);
 CREATE INDEX idx_document_versions_document ON document_versions(document_id);
 CREATE INDEX idx_document_versions_guid ON document_versions(guid);
 CREATE INDEX idx_document_jobs_version ON document_jobs(document_version_id);

@@ -1,3 +1,53 @@
+# Database
+
+## Migrations
+
+Migrations are managed using [Flyway](https://flywaydb.org/) via Docker.
+
+### Setup
+
+```bash
+cp database/.env.example database/.env
+# Edit database/.env with your credentials
+```
+
+### Commands
+
+```bash
+make db-info      # Show migration status
+make db-migrate   # Run pending migrations
+make db-validate  # Validate applied migrations match files
+make db-repair    # Repair schema history after failed migrations
+make db-baseline  # Baseline existing database at V1
+make db-add       # Adds a new empty migration
+```
+
+### Baselining an Existing Database
+
+For databases that already have the schema applied (e.g., the dev database), run:
+
+```bash
+make db-baseline  # Marks V1 as already applied
+make db-info      # Verify - should show V1 as "Baseline"
+```
+
+### Creating New Migrations
+
+Create new files following Flyway's naming convention:
+
+```
+database/migrations/V2__description_here.sql
+database/migrations/V3__another_change.sql
+```
+
+Then run:
+
+```bash
+make db-migrate
+```
+
+---
+
 # Data Model
 
 # Document

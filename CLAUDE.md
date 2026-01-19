@@ -105,6 +105,20 @@ All Python components require:
 
 ## Database Management
 
+### Migrations (Flyway)
+
+```bash
+cp database/.env.example database/.env  # Configure credentials (JDBC format)
+make db-info                            # Show migration status
+make db-migrate                         # Run pending migrations
+make db-validate                        # Validate applied migrations
+make db-baseline                        # Baseline existing database at V1
+```
+
+New migrations: `database/migrations/V2__description.sql`
+
+### Azure PostgreSQL
+
 ```bash
 # Stop PostgreSQL (save costs when not in use)
 az postgres flexible-server stop --resource-group rg-techpubsai-dev --name psql-techpubsai-dev
