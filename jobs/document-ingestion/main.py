@@ -10,7 +10,13 @@ from azure.storage.blob import BlobServiceClient
 from azure.storage.queue import QueueClient
 from docling.document_converter import DocumentConverter
 
-from techpubs_core import DocumentChunk, DocumentJob, DocumentVersion, get_session
+from techpubs_core import (
+    DOCUMENTS_CONTAINER,
+    DocumentChunk,
+    DocumentJob,
+    DocumentVersion,
+    get_session,
+)
 from techpubs_core.embeddings import generate_embeddings_batch
 
 
@@ -43,14 +49,7 @@ def download_blob(storage_account_url: str, blob_path: str) -> bytes:
     """Download blob content from Azure Blob Storage."""
     credential = get_credential()
     blob_service_client = BlobServiceClient(storage_account_url, credential=credential)
-
-    # blob_path format: "container_name/path/to/blob"
-    parts = blob_path.split("/", 1)
-    if len(parts) != 2:
-        raise ValueError(f"Invalid blob_path format: {blob_path}. Expected 'container/path'")
-
-    container_name, blob_name = parts
-    blob_client = blob_service_client.get_blob_client(container_name, blob_name)
+    blob_client = blob_service_client.get_blob_client(DOCUMENTS_CONTAINER, blob_path)
 
     return blob_client.download_blob().readall()
 

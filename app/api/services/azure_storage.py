@@ -11,6 +11,7 @@ from azure.storage.blob import (
 )
 
 from config import settings
+from techpubs_core import DOCUMENTS_CONTAINER
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,6 @@ class AzureStorageService:
         safe_category = sanitize_path_segment(category_name)
         blob_path = f"{safe_model}/{safe_category}/{blob_name}"
 
-        container_name = "documents"
-
         logger.info(f"Generating SAS URL for blob: {blob_path}")
 
         user_delegation_key = self._blob_service_client.get_user_delegation_key(
@@ -66,16 +65,16 @@ class AzureStorageService:
         # Don't enforce content_type in SAS to avoid mismatch issues
         sas_token = generate_blob_sas(
             account_name=account_name,
-            container_name=container_name,
+            container_name=DOCUMENTS_CONTAINER,
             blob_name=blob_path,
             user_delegation_key=user_delegation_key,
             permission=BlobSasPermissions(write=True, create=True),
             expiry=datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
-        upload_url = f"{settings.storage_account_url}/{container_name}/{blob_path}?{sas_token}"
+        upload_url = f"{settings.storage_account_url}/{DOCUMENTS_CONTAINER}/{blob_path}?{sas_token}"
 
-        logger.info(f"Generated SAS URL for container: {container_name}, blob: {blob_path}")
+        logger.info(f"Generated SAS URL for container: {DOCUMENTS_CONTAINER}, blob: {blob_path}")
 
         return upload_url, blob_path
 
