@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import aircraft_models, categories, jobs, uploads
+from routers import aircraft_models, categories, documents, jobs, uploads
 
 app = FastAPI()
 
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(aircraft_models.router)
 app.include_router(categories.router)
+app.include_router(documents.router)
 app.include_router(jobs.router)
 app.include_router(uploads.router)
 
