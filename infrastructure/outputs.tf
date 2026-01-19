@@ -33,3 +33,8 @@ output "api_identity_client_id" {
   value       = azurerm_user_assigned_identity.api.client_id
   description = "The client ID of the API managed identity"
 }
+
+output "document_ingestion_client_id" {
+  value = azurerm_user_assigned_identity.document_ingestion.client_id
+  description = "The client ID of the Document Ingestion contaienr app job managed identity."
+}

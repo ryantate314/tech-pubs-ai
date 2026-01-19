@@ -1,55 +1,78 @@
 # Document Ingestion Job
 
-Azure Container App Job that processes documents when they are uploaded to blob storage.
+Azure Container App Job that processes documents from the queue when they are uploaded.
 
 ## How It Works
 
-1. A file is uploaded to Azure Blob Storage
-2. Azure Event Grid detects the blob created event
-3. Event Grid triggers this Container App Job
-4. The job downloads and processes the document
+1. A file is uploaded to Azure Blob Storage via the API
+2. The API creates a DocumentJob record and sends a message to the queue
+3. The queue triggers this Container App Job
+4. The job downloads the document, extracts text chunks, generates embeddings, and stores them in the database
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BLOB_EVENT_DATA` | Yes | JSON event data from Event Grid (set automatically by trigger) |
-| `STORAGE_ACCOUNT_URL` | No | Storage account URL (extracted from event if not set) |
+| `STORAGE_ACCOUNT_URL` | Yes | Azure Blob Storage URL |
+| `STORAGE_QUEUE_URL` | Yes | Azure Queue Storage URL |
+| `QUEUE_NAME` | Yes | Name of the queue to poll for jobs |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
 
 ## Local Development
 
 ```bash
+# From the repo root
+cd /path/to/tech-pubs-v3
+
 # Install dependencies
 uv sync
 
-# Run with sample event data
-BLOB_EVENT_DATA='{"subject":"/blobServices/default/containers/documents/blobs/test.pdf","source":"/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.Storage/storageAccounts/mystorageaccount"}' \
+# Run the job (requires environment variables)
+cd jobs/document-ingestion
 uv run python main.py
+```
+
+## Docker Build
+
+This project uses a uv monorepo. Docker builds must be run from the **repo root**:
+
+```bash
+# From the repo root
+cd /path/to/tech-pubs-v3
+
+# Build the image
+docker build -f jobs/document-ingestion/Dockerfile -t document-ingestion .
+
+# Run locally
+docker run --env-file jobs/document-ingestion/.env document-ingestion
 ```
 
 ## Publishing to Azure Container Registry
 
-The Terraform configuration provisions a private Azure Container Registry. To build and push the Docker image:
-
 ```bash
+# From the repo root
+cd /path/to/tech-pubs-v3
+
 # Get the registry name from Terraform output
-cd infrastructure
-ACR_NAME=$(terraform output -raw container_registry_name)
+ACR_NAME=$(cd infrastructure && terraform output -raw container_registry_name)
 
 # Login to the registry
 az acr login --name $ACR_NAME
 
 # Build and push the image
-cd ../jobs/document-ingestion
-docker build -t $ACR_NAME.azurecr.io/document-ingestion:latest .
+docker build -f jobs/document-ingestion/Dockerfile -t $ACR_NAME.azurecr.io/document-ingestion:latest .
 docker push $ACR_NAME.azurecr.io/document-ingestion:latest
 ```
 
-Alternatively, you can build directly in ACR:
+Or build directly in ACR:
 
 ```bash
-cd jobs/document-ingestion
-az acr build --registry $ACR_NAME --image document-ingestion:latest .
+# From the repo root
+az acr build \
+  --registry $ACR_NAME \
+  --image document-ingestion:latest \
+  --file jobs/document-ingestion/Dockerfile \
+  .
 ```
 
 ## Authentication

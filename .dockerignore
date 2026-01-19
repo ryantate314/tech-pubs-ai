@@ -1,0 +1,63 @@
+# Git
+.git/
+.gitignore
+
+# Python virtual environments
+.venv/
+*/.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# Infrastructure (not needed for app containers)
+infrastructure/
+
+# Documentation (keep package READMEs needed for builds)
+CLAUDE.md
+LICENSE
+Makefile
+
+# Test files
+test.sh
+**/test_*.py
+**/*_test.py
+htmlcov/
+.coverage
+coverage.xml
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/

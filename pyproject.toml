@@ -6,3 +6,11 @@ dependencies = []
 
 [tool.uv.workspace]
 members = ["packages/*", "app/api", "jobs/document-ingestion"]
+
+# Resolve dependencies for multiple platforms so the lockfile works for both
+# local development (macOS ARM) and Docker builds (Linux x86_64)
+[tool.uv]
+environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]

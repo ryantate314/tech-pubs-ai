@@ -19,6 +19,16 @@ resource "azurerm_storage_account" "main" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   resource_group_name      = azurerm_resource_group.main.name
+
+  blob_properties {
+    cors_rule {
+      allowed_headers    = ["*"]
+      allowed_methods    = ["PUT"]
+      allowed_origins    = var.cors_allowed_origins
+      exposed_headers    = ["*"]
+      max_age_in_seconds = 3600
+    }
+  }
 }
 
 resource "azurerm_storage_container" "documents" {
@@ -29,7 +39,7 @@ resource "azurerm_storage_container" "documents" {
 # Storage Queue for document ingestion jobs
 resource "azurerm_storage_queue" "document_ingestion" {
   name                 = "document-ingestion"
-  storage_account_name = azurerm_storage_account.main.name
+  storage_account_id = azurerm_storage_account.main.id
 }
 
 # Container Registry for storing the document ingestion job image
@@ -90,6 +100,13 @@ resource "azurerm_user_assigned_identity" "api" {
 resource "azurerm_role_assignment" "api_blob_contributor" {
   scope                = azurerm_storage_account.main.id
   role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.api.principal_id
+}
+
+# Grant the API identity access to generate User Delegation SAS tokens
+resource "azurerm_role_assignment" "api_blob_delegator" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Blob Delegator"
   principal_id         = azurerm_user_assigned_identity.api.principal_id
 }
 
@@ -186,6 +203,11 @@ resource "azurerm_container_app_job" "document_ingestion" {
       env {
         name        = "DATABASE_URL"
         secret_name = "database-url"
+      }
+
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.document_ingestion.client_id
       }
     }
   }

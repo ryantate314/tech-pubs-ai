@@ -11,6 +11,17 @@ class Base(DeclarativeBase):
     pass
 
 
+class AircraftModel(Base):
+    __tablename__ = "aircraft_models"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    documents: Mapped[list["Document"]] = relationship(back_populates="aircraft_model")
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -29,11 +40,13 @@ class Document(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     guid: Mapped[UUID] = mapped_column(nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    aircraft_model_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("aircraft_models.id"), nullable=True)
     category_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    aircraft_model: Mapped[Optional["AircraftModel"]] = relationship(back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
 

@@ -52,6 +52,35 @@ A document management system for uploading, processing, and searching PDF docume
 
 ## Development
 
+### API
+
+```bash
+cd app/api
+cp .env.example .env      # Configure environment variables
+uv sync                   # Install dependencies
+uv run uvicorn main:app --reload
+```
+
+The API will be available at http://localhost:8000
+
+Required environment variables:
+- `STORAGE_ACCOUNT_URL` - Azure Blob Storage URL
+- `STORAGE_QUEUE_URL` - Azure Queue Storage URL
+- `QUEUE_NAME` - Queue name for document ingestion jobs
+- `DATABASE_URL` - PostgreSQL connection string
+
+### UI
+
+```bash
+cd app/ui
+npm install               # Install dependencies
+npm run dev               # Start development server
+```
+
+The UI will be available at http://localhost:3000
+
+Set `API_URL=http://localhost:8000` in `.env.local` to connect to the local API.
+
 ### Document Ingestion Job
 
 ```bash

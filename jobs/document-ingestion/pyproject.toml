@@ -10,7 +10,26 @@ dependencies = [
     "azure-storage-queue>=12.0.0",
     "docling>=2.0",
     "techpubs-core[embeddings]",
+    # PyTorch CPU-only configuration:
+    # We explicitly list torch/torchvision here (even though they're transitive deps of docling
+    # and sentence-transformers) so that tool.uv.sources applies to them. Without this, uv would
+    # pull CUDA builds from PyPI, adding ~14GB of NVIDIA libraries to the Docker image.
+    # Version pins must match what's available on the CPU index for both macOS ARM and Linux x86_64.
+    "torch>=2.5.0,<2.6.0",
+    "torchvision>=0.20.0,<0.21.0",
 ]
+
+# Define the CPU-only PyTorch index. "explicit = true" ensures this index is only used for
+# packages explicitly configured in tool.uv.sources (not for all packages).
+# See: https://docs.astral.sh/uv/guides/integration/pytorch/
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.uv.sources]
 techpubs-core = { workspace = true }
+# Force torch and torchvision to use the CPU-only index defined above.
+# This reduces Docker image size from ~16GB to ~2-4GB.
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]

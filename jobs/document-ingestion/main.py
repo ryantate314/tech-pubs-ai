@@ -14,9 +14,17 @@ from techpubs_core import DocumentChunk, DocumentJob, DocumentVersion, get_sessi
 from techpubs_core.embeddings import generate_embeddings_batch
 
 
+def get_credential() -> DefaultAzureCredential:
+    """Create a credential using managed identity."""
+    client_id = os.environ.get("AZURE_CLIENT_ID")
+    if not client_id:
+        print("WARNING: AZURE_CLIENT_ID not set. Managed identity authentication may fail for user-assigned identities.")
+    return DefaultAzureCredential(managed_identity_client_id=client_id)
+
+
 def get_queue_client() -> QueueClient:
     """Create a QueueClient using managed identity."""
-    credential = DefaultAzureCredential()
+    credential = get_credential()
     queue_url = os.environ.get("STORAGE_QUEUE_URL")
     queue_name = os.environ.get("QUEUE_NAME")
 
@@ -33,7 +41,7 @@ def get_queue_client() -> QueueClient:
 
 def download_blob(storage_account_url: str, blob_path: str) -> bytes:
     """Download blob content from Azure Blob Storage."""
-    credential = DefaultAzureCredential()
+    credential = get_credential()
     blob_service_client = BlobServiceClient(storage_account_url, credential=credential)
 
     # blob_path format: "container_name/path/to/blob"

@@ -2,6 +2,7 @@
 
 from techpubs_core.database import get_engine, get_session, get_session_factory
 from techpubs_core.models import (
+    AircraftModel,
     Base,
     Category,
     Document,
@@ -11,6 +12,7 @@ from techpubs_core.models import (
 )
 
 __all__ = [
+    "AircraftModel",
     "Base",
     "Category",
     "Document",
