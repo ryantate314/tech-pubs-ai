@@ -12,7 +12,8 @@ supported-markers = [
 
 [manifest]
 members = [
-    "document-ingestion",
+    "document-chunking",
+    "document-embedding",
     "tech-pubs-v3",
     "techpubs-core",
     "techpubsai",
@@ -414,15 +415,15 @@ wheels = [
 ]
 
 [[package]]
-name = "document-ingestion"
+name = "document-chunking"
 version = "0.1.0"
-source = { virtual = "jobs/document-ingestion" }
+source = { virtual = "jobs/document-chunking" }
 dependencies = [
     { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "azure-storage-blob", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "docling", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "techpubs-core", extra = ["embeddings"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "techpubs-core", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
 
 [package.metadata]
@@ -431,6 +432,23 @@ requires-dist = [
     { name = "azure-storage-blob", specifier = ">=12.24.0" },
     { name = "azure-storage-queue", specifier = ">=12.0.0" },
     { name = "docling", specifier = ">=2.0" },
+    { name = "techpubs-core", editable = "packages/techpubs-core" },
+]
+
+[[package]]
+name = "document-embedding"
+version = "0.1.0"
+source = { virtual = "jobs/document-embedding" }
+dependencies = [
+    { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "techpubs-core", extra = ["embeddings"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "azure-identity", specifier = ">=1.19.0" },
+    { name = "azure-storage-queue", specifier = ">=12.0.0" },
     { name = "techpubs-core", extras = ["embeddings"], editable = "packages/techpubs-core" },
 ]
 

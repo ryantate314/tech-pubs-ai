@@ -104,13 +104,13 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
 
         document_job = DocumentJob(
             document_version_id=document_version.id,
-            job_type="ingestion",
+            job_type="chunking",
             status="pending",
         )
         session.add(document_job)
         session.flush()
 
-        queue_service.send_job_message(document_job.id)
+        queue_service.send_chunking_job_message(document_job.id)
 
         return UploadCompleteResponse(
             document_id=document.id,

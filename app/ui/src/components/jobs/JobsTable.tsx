@@ -123,7 +123,7 @@ export function JobsTable({
                 {job.error_message || "-"}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm">
-                {job.status === "pending" && (
+                {(job.status === "pending" || job.status === "running") && (
                   <button
                     onClick={() => onCancel(job.id)}
                     disabled={actionInProgress === job.id}

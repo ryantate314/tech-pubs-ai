@@ -16,10 +16,15 @@ from techpubs_core import (
     DOCUMENTS_CONTAINER,
     DocumentChunk,
     DocumentJob,
-    DocumentVersion,
     get_session,
 )
-from techpubs_core.embeddings import MODEL_NAME, generate_embeddings_batch
+
+# Embedding model name (used for tokenizer in chunking)
+# Defined here to avoid importing sentence-transformers
+EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
+
+# Batch size for embedding jobs (number of chunks per job)
+EMBEDDING_BATCH_SIZE = 100
 
 
 def get_credential() -> DefaultAzureCredential:
@@ -31,13 +36,30 @@ def get_credential() -> DefaultAzureCredential:
 
 
 def get_queue_client() -> QueueClient:
-    """Create a QueueClient using managed identity."""
+    """Create a QueueClient for the main job queue using managed identity."""
     credential = get_credential()
     queue_url = os.environ.get("STORAGE_QUEUE_URL")
     queue_name = os.environ.get("QUEUE_NAME")
 
     if not queue_url or not queue_name:
         raise ValueError("STORAGE_QUEUE_URL and QUEUE_NAME environment variables must be set")
+
+    account_url = queue_url.rstrip("/")
+    return QueueClient(
+        account_url=account_url,
+        queue_name=queue_name,
+        credential=credential,
+    )
+
+
+def get_embedding_queue_client() -> QueueClient:
+    """Create a QueueClient for the embedding queue."""
+    credential = get_credential()
+    queue_url = os.environ.get("STORAGE_QUEUE_URL")
+    queue_name = os.environ.get("EMBEDDING_QUEUE_NAME")
+
+    if not queue_url or not queue_name:
+        raise ValueError("STORAGE_QUEUE_URL and EMBEDDING_QUEUE_NAME environment variables must be set")
 
     account_url = queue_url.rstrip("/")
     return QueueClient(
@@ -80,9 +102,10 @@ def extract_text_chunks(file_path: str) -> Iterator[dict]:
 
     # Use HybridChunker with tokenizer matching our embedding model
     # This ensures chunks are properly sized for embedding and respect document structure
+    # Use 400 max_tokens to leave room for heading context added by contextualize()
     chunker = HybridChunker(
-        tokenizer=MODEL_NAME,
-        max_tokens=512,
+        tokenizer=EMBEDDING_MODEL_NAME,
+        max_tokens=400,
         merge_peers=True,
     )
 
@@ -107,67 +130,87 @@ def extract_text_chunks(file_path: str) -> Iterator[dict]:
         }
 
 
-def process_and_store_chunks(
+def store_chunks_without_embeddings(
     chunks: Iterator[dict],
     document_version_id: int,
     session,
-    batch_size: int = 32,
-) -> int:
+) -> list[DocumentChunk]:
     """
-    Process chunks in batches: generate embeddings and store in database.
+    Store chunks in the database without embeddings.
 
-    Streams chunks from the iterator, batching them to efficiently generate
-    embeddings while minimizing memory usage.
-
-    Returns the total number of chunks processed.
+    Returns the list of created DocumentChunk objects.
     """
-    batch = []
-    total_chunks = 0
+    stored_chunks = []
 
     for chunk in chunks:
-        batch.append(chunk)
-
-        if len(batch) >= batch_size:
-            _embed_and_store_batch(batch, document_version_id, session)
-            total_chunks += len(batch)
-            print(f"  Processed {total_chunks} chunks...")
-            batch = []
-
-    # Process any remaining chunks
-    if batch:
-        _embed_and_store_batch(batch, document_version_id, session)
-        total_chunks += len(batch)
-
-    return total_chunks
-
-
-def _embed_and_store_batch(batch: list[dict], document_version_id: int, session) -> None:
-    """Generate embeddings for a batch of chunks and store them in the database."""
-    chunk_texts = [c["content"] for c in batch]
-    embeddings = generate_embeddings_batch(chunk_texts)
-
-    for chunk, embedding in zip(batch, embeddings):
         document_chunk = DocumentChunk(
             document_version_id=document_version_id,
             chunk_index=chunk["chunk_index"],
             content=chunk["content"],
-            embedding=embedding,
+            embedding=None,  # Will be filled in by embedding job
             token_count=len(chunk["content"].split()),
             page_number=chunk["page_number"],
         )
         session.add(document_chunk)
+        stored_chunks.append(document_chunk)
+
+        if len(stored_chunks) % 100 == 0:
+            print(f"  Stored {len(stored_chunks)} chunks...")
+
+    return stored_chunks
 
 
-def process_document_job(job_id: int) -> None:
+def create_embedding_jobs(
+    document_version_id: int,
+    total_chunks: int,
+    parent_job_id: int,
+    session,
+) -> list[DocumentJob]:
     """
-    Process a document ingestion job.
+    Create embedding jobs for batches of chunks.
+
+    Returns the list of created DocumentJob objects.
+    """
+    embedding_jobs = []
+
+    for start_idx in range(0, total_chunks, EMBEDDING_BATCH_SIZE):
+        end_idx = min(start_idx + EMBEDDING_BATCH_SIZE, total_chunks)
+
+        embedding_job = DocumentJob(
+            document_version_id=document_version_id,
+            job_type="embedding",
+            status="pending",
+            parent_job_id=parent_job_id,
+            chunk_start_index=start_idx,
+            chunk_end_index=end_idx,
+        )
+        session.add(embedding_job)
+        embedding_jobs.append(embedding_job)
+
+    return embedding_jobs
+
+
+def queue_embedding_jobs(embedding_jobs: list[DocumentJob]) -> None:
+    """Queue embedding jobs to the embedding queue."""
+    queue_client = get_embedding_queue_client()
+
+    for job in embedding_jobs:
+        message = json.dumps({"job_id": job.id})
+        queue_client.send_message(message)
+        print(f"  Queued embedding job {job.id} (chunks {job.chunk_start_index}-{job.chunk_end_index})")
+
+
+def process_chunking_job(job_id: int) -> None:
+    """
+    Process a document chunking job.
 
     1. Look up the DocumentJob by ID
     2. Get the associated DocumentVersion and blob_path
     3. Download and parse the document
-    4. Extract text chunks and generate embeddings
-    5. Store chunks in the database
-    6. Update job status
+    4. Extract text chunks and store WITHOUT embeddings
+    5. Create embedding jobs for batches of chunks
+    6. Queue embedding jobs
+    7. Update job status
     """
     storage_account_url = os.environ.get("STORAGE_ACCOUNT_URL")
     if not storage_account_url:
@@ -191,13 +234,13 @@ def process_document_job(job_id: int) -> None:
         if not document_version.blob_path:
             raise ValueError(f"DocumentVersion {document_version.id} has no blob_path")
 
-        print(f"Processing job {job_id} for document version {document_version.id}")
+        print(f"Processing chunking job {job_id} for document version {document_version.id}")
         print(f"Blob path: {document_version.blob_path}")
 
         # Mark job as running
         job.status = "running"
         job.started_at = datetime.now()
-        session.commit()  # Commit immediately so status is visible to other connections
+        session.commit()
 
         # Create temp file for download
         suffix = Path(document_version.file_name).suffix
@@ -212,24 +255,48 @@ def process_document_job(job_id: int) -> None:
             )
             print(f"Downloaded {bytes_downloaded} bytes")
 
-            # Extract chunks, generate embeddings, and store in database
-            print("Processing document chunks...")
-            total_chunks = process_and_store_chunks(
-                chunks=extract_text_chunks(tmp_path),
-                document_version_id=document_version.id,
-                session=session,
-            )
+            # Extract and store chunks without embeddings
+            print("Extracting and storing chunks...")
+            chunks = list(extract_text_chunks(tmp_path))
+            total_chunks = len(chunks)
 
             if total_chunks == 0:
                 print("No text chunks extracted")
+                job.status = "completed"
+                job.completed_at = datetime.now()
+                return
 
-            # Mark job as completed
+            store_chunks_without_embeddings(
+                iter(chunks),
+                document_version.id,
+                session,
+            )
+            session.flush()  # Ensure chunks are in DB before creating embedding jobs
+
+            print(f"Stored {total_chunks} chunks, creating embedding jobs...")
+
+            # Create embedding jobs for batches
+            embedding_jobs = create_embedding_jobs(
+                document_version_id=document_version.id,
+                total_chunks=total_chunks,
+                parent_job_id=job_id,
+                session=session,
+            )
+            session.flush()  # Ensure embedding jobs have IDs
+
+            print(f"Created {len(embedding_jobs)} embedding jobs")
+
+            # Queue embedding jobs
+            queue_embedding_jobs(embedding_jobs)
+
+            # Mark chunking job as completed
             job.status = "completed"
             job.completed_at = datetime.now()
 
-            print(f"Successfully processed job {job_id}")
+            print(f"Successfully processed chunking job {job_id}")
             print(f"  - Document Version ID: {document_version.id}")
             print(f"  - Chunks stored: {total_chunks}")
+            print(f"  - Embedding jobs created: {len(embedding_jobs)}")
 
         except Exception as e:
             job.status = "failed"
@@ -260,14 +327,14 @@ def process_queue_message(message_content: str) -> int:
 
 
 def main():
-    print("Document ingestion job started")
+    print("Document chunking job started")
 
     try:
         queue_client = get_queue_client()
 
         # Receive messages from the queue
         # visibility_timeout ensures the message is hidden from other consumers while processing
-        messages = queue_client.receive_messages(visibility_timeout=300, max_messages=1)
+        messages = queue_client.receive_messages(visibility_timeout=600, max_messages=1)
 
         message_count = 0
         for message in messages:
@@ -278,7 +345,7 @@ def main():
                 job_id = process_queue_message(message.content)
                 print(f"Processing job ID: {job_id}")
 
-                process_document_job(job_id)
+                process_chunking_job(job_id)
 
                 # Delete the message after successful processing
                 queue_client.delete_message(message)
@@ -292,10 +359,10 @@ def main():
         if message_count == 0:
             print("No messages in queue")
 
-        print("Document ingestion job completed")
+        print("Document chunking job completed")
 
     except Exception as e:
-        print(f"Error in document ingestion job: {e}", file=sys.stderr)
+        print(f"Error in document chunking job: {e}", file=sys.stderr)
         sys.exit(1)
 
 

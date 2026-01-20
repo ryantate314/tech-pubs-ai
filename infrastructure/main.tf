@@ -43,9 +43,14 @@ resource "azurerm_storage_container" "documents" {
   storage_account_id = azurerm_storage_account.main.id
 }
 
-# Storage Queue for document ingestion jobs
-resource "azurerm_storage_queue" "document_ingestion" {
-  name                 = "document-ingestion"
+# Storage Queues for document processing jobs
+resource "azurerm_storage_queue" "document_chunking" {
+  name               = "document-chunking"
+  storage_account_id = azurerm_storage_account.main.id
+}
+
+resource "azurerm_storage_queue" "document_embedding" {
+  name               = "document-embedding"
   storage_account_id = azurerm_storage_account.main.id
 }
 
@@ -131,14 +136,14 @@ resource "azurerm_role_assignment" "document_ingestion_acr_pull" {
   principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
 }
 
-# Container App Job for document ingestion (event-driven)
-resource "azurerm_container_app_job" "document_ingestion" {
-  name                         = "caj-document-ingestion-${var.environment}"
+# Container App Job for document chunking (event-driven)
+resource "azurerm_container_app_job" "document_chunking" {
+  name                         = "caj-document-chunking-${var.environment}"
   resource_group_name          = azurerm_resource_group.main.name
   location                     = azurerm_resource_group.main.location
   container_app_environment_id = azurerm_container_app_environment.main.id
 
-  replica_timeout_in_seconds = 300
+  replica_timeout_in_seconds = 600
   replica_retry_limit        = 1
 
   identity {
@@ -164,7 +169,7 @@ resource "azurerm_container_app_job" "document_ingestion" {
         name             = "queue-trigger"
         custom_rule_type = "azure-queue"
         metadata = {
-          queueName   = azurerm_storage_queue.document_ingestion.name
+          queueName   = azurerm_storage_queue.document_chunking.name
           accountName = azurerm_storage_account.main.name
         }
         authentication {
@@ -187,8 +192,8 @@ resource "azurerm_container_app_job" "document_ingestion" {
 
   template {
     container {
-      name   = "document-ingestion"
-      image  = "${azurerm_container_registry.main.login_server}/document-ingestion:latest"
+      name   = "document-chunking"
+      image  = "${azurerm_container_registry.main.login_server}/document-chunking:latest"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -204,7 +209,102 @@ resource "azurerm_container_app_job" "document_ingestion" {
 
       env {
         name  = "QUEUE_NAME"
-        value = azurerm_storage_queue.document_ingestion.name
+        value = azurerm_storage_queue.document_chunking.name
+      }
+
+      env {
+        name  = "EMBEDDING_QUEUE_NAME"
+        value = azurerm_storage_queue.document_embedding.name
+      }
+
+      env {
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
+      }
+
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.document_ingestion.client_id
+      }
+    }
+  }
+
+  depends_on = [
+    azurerm_role_assignment.document_ingestion_acr_pull,
+    azurerm_role_assignment.document_ingestion_blob_reader,
+    azurerm_role_assignment.document_ingestion_queue_processor
+  ]
+}
+
+# Container App Job for document embedding (event-driven)
+resource "azurerm_container_app_job" "document_embedding" {
+  name                         = "caj-document-embedding-${var.environment}"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  container_app_environment_id = azurerm_container_app_environment.main.id
+
+  replica_timeout_in_seconds = 300
+  replica_retry_limit        = 1
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
+  }
+
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.document_ingestion.id
+  }
+
+  event_trigger_config {
+    parallelism              = 1
+    replica_completion_count = 1
+
+    scale {
+      min_executions              = 0
+      max_executions              = 50
+      polling_interval_in_seconds = 30
+
+      rules {
+        name             = "queue-trigger"
+        custom_rule_type = "azure-queue"
+        metadata = {
+          queueName   = azurerm_storage_queue.document_embedding.name
+          accountName = azurerm_storage_account.main.name
+        }
+        authentication {
+          secret_name       = "storage-connection-string"
+          trigger_parameter = "connection"
+        }
+      }
+    }
+  }
+
+  secret {
+    name  = "storage-connection-string"
+    value = azurerm_storage_account.main.primary_connection_string
+  }
+
+  secret {
+    name  = "database-url"
+    value = var.database_url
+  }
+
+  template {
+    container {
+      name   = "document-embedding"
+      image  = "${azurerm_container_registry.main.login_server}/document-embedding:latest"
+      cpu    = 0.5
+      memory = "1Gi"
+
+      env {
+        name  = "STORAGE_QUEUE_URL"
+        value = azurerm_storage_account.main.primary_queue_endpoint
+      }
+
+      env {
+        name  = "QUEUE_NAME"
+        value = azurerm_storage_queue.document_embedding.name
       }
 
       env {

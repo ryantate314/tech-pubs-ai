@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [tool.uv.workspace]
-members = ["packages/*", "app/api", "jobs/document-ingestion"]
+members = ["packages/*", "app/api", "jobs/document-chunking", "jobs/document-embedding"]
 
 # Resolve dependencies for multiple platforms so the lockfile works for both
 # local development (macOS ARM) and Docker builds (Linux x86_64)

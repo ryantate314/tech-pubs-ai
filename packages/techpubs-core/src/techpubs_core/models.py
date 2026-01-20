@@ -84,7 +84,17 @@ class DocumentJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
 
+    # For split chunking/embedding jobs
+    parent_job_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("document_jobs.id"), nullable=True)
+    chunk_start_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    chunk_end_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     document_version: Mapped["DocumentVersion"] = relationship(back_populates="jobs")
+    parent_job: Mapped[Optional["DocumentJob"]] = relationship(
+        back_populates="child_jobs",
+        remote_side=[id],
+    )
+    child_jobs: Mapped[list["DocumentJob"]] = relationship(back_populates="parent_job")
 
 
 class DocumentChunk(Base):

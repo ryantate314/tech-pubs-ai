@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     )
     storage_account_url: str = ""
     storage_queue_url: str = ""
-    queue_name: str = "document-ingestion"
+    chunking_queue_name: str = "document-chunking"
     database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
 

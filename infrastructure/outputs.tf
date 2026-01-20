@@ -19,9 +19,14 @@ output "storage_queue_url" {
   description = "The URL of the storage queue endpoint"
 }
 
-output "document_ingestion_queue_name" {
-  value       = azurerm_storage_queue.document_ingestion.name
-  description = "The name of the document ingestion queue"
+output "document_chunking_queue_name" {
+  value       = azurerm_storage_queue.document_chunking.name
+  description = "The name of the document chunking queue"
+}
+
+output "document_embedding_queue_name" {
+  value       = azurerm_storage_queue.document_embedding.name
+  description = "The name of the document embedding queue"
 }
 
 output "api_identity_id" {

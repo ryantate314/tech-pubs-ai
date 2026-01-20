@@ -1,4 +1,8 @@
-.PHONY: build-document-ingestion publish-document-ingestion run-document-ingestion
+.PHONY: build-jobs-base publish-jobs-base
+.PHONY: build-document-chunking publish-document-chunking
+.PHONY: build-document-embedding publish-document-embedding
+.PHONY: publish-all-jobs
+.PHONY: run-chunking-job run-embedding-job
 .PHONY: db-info db-migrate db-validate db-repair db-baseline db-add
 .PHONY: terraform-apply
 .PHONY: nextjs-run
@@ -16,17 +20,49 @@ FLYWAY_CMD = docker run --rm \
 	-v $(PWD)/database/migrations:/flyway/sql:ro \
 	flyway/flyway:$(FLYWAY_VERSION)
 
-build-document-ingestion:
-	docker build -f jobs/document-ingestion/Dockerfile -t document-ingestion:$(IMAGE_TAG) .
+# Base image (shared PyTorch + CUDA)
+build-jobs-base:
+	docker build -f jobs/base/Dockerfile -t jobs-base:$(IMAGE_TAG) .
 
-publish-document-ingestion: build-document-ingestion
+publish-jobs-base: build-jobs-base
 	@if [ -z "$(ACR_NAME)" ]; then echo "Error: Could not get ACR name from Terraform. Run 'terraform apply' first or set ACR_NAME manually." && exit 1; fi
 	az acr login --name $(ACR_NAME)
-	docker tag document-ingestion:$(IMAGE_TAG) $(ACR_NAME).azurecr.io/document-ingestion:$(IMAGE_TAG)
-	docker push $(ACR_NAME).azurecr.io/document-ingestion:$(IMAGE_TAG)
+	docker tag jobs-base:$(IMAGE_TAG) $(ACR_NAME).azurecr.io/jobs-base:$(IMAGE_TAG)
+	docker push $(ACR_NAME).azurecr.io/jobs-base:$(IMAGE_TAG)
 
-run-document-ingestion:
-	cd jobs/document-ingestion/; uv run --env-file=.env main.py
+# Document Chunking Job
+build-document-chunking:
+	@if [ -z "$(ACR_NAME)" ]; then echo "Error: Could not get ACR name from Terraform. Run 'terraform apply' first or set ACR_NAME manually." && exit 1; fi
+	docker build -f jobs/document-chunking/Dockerfile \
+		--build-arg ACR_NAME=$(ACR_NAME) \
+		-t document-chunking:$(IMAGE_TAG) .
+
+publish-document-chunking: build-document-chunking
+	az acr login --name $(ACR_NAME)
+	docker tag document-chunking:$(IMAGE_TAG) $(ACR_NAME).azurecr.io/document-chunking:$(IMAGE_TAG)
+	docker push $(ACR_NAME).azurecr.io/document-chunking:$(IMAGE_TAG)
+
+# Document Embedding Job
+build-document-embedding:
+	@if [ -z "$(ACR_NAME)" ]; then echo "Error: Could not get ACR name from Terraform. Run 'terraform apply' first or set ACR_NAME manually." && exit 1; fi
+	docker build -f jobs/document-embedding/Dockerfile \
+		--build-arg ACR_NAME=$(ACR_NAME) \
+		-t document-embedding:$(IMAGE_TAG) .
+
+publish-document-embedding: build-document-embedding
+	az acr login --name $(ACR_NAME)
+	docker tag document-embedding:$(IMAGE_TAG) $(ACR_NAME).azurecr.io/document-embedding:$(IMAGE_TAG)
+	docker push $(ACR_NAME).azurecr.io/document-embedding:$(IMAGE_TAG)
+
+# Build and publish all (base first, then jobs)
+publish-all-jobs: publish-jobs-base publish-document-chunking publish-document-embedding
+
+# Local development
+run-chunking-job:
+	cd jobs/document-chunking && uv run --env-file=.env python main.py
+
+run-embedding-job:
+	cd jobs/document-embedding && uv run --env-file=.env python main.py
 
 # Database migrations (Flyway)
 db-info:

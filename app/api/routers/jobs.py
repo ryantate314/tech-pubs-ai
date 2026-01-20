@@ -89,7 +89,7 @@ def cancel_job(job_id: int) -> JobActionResponse:
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        if job.status != "pending":
+        if job.status != "pending" and job.status != "running":
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot cancel job with status '{job.status}'. Only pending jobs can be cancelled.",
@@ -135,7 +135,7 @@ def requeue_job(job_id: int) -> JobActionResponse:
         session.refresh(job)
 
         # Send message to queue
-        queue_service.send_job_message(job.id)
+        queue_service.send_chunking_job_message(job.id)
 
         return JobActionResponse(
             success=True,

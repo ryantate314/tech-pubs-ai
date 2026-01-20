@@ -1,0 +1,15 @@
+[project]
+name = "document-chunking"
+version = "0.1.0"
+description = "Azure Container App Job for chunking documents from blob storage"
+requires-python = ">=3.12"
+dependencies = [
+    "azure-identity>=1.19.0",
+    "azure-storage-blob>=12.24.0",
+    "azure-storage-queue>=12.0.0",
+    "docling>=2.0",
+    "techpubs-core",
+]
+
+[tool.uv.sources]
+techpubs-core = { workspace = true }
