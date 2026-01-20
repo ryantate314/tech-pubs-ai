@@ -78,5 +78,38 @@ class AzureStorageService:
 
         return upload_url, blob_path
 
+    def generate_download_url(self, blob_path: str) -> str:
+        """Generate a SAS URL for downloading/reading a blob.
+
+        Args:
+            blob_path: The path to the blob within the documents container.
+
+        Returns:
+            str: The SAS URL for reading the blob.
+        """
+        logger.info(f"Generating download SAS URL for blob: {blob_path}")
+
+        user_delegation_key = self._blob_service_client.get_user_delegation_key(
+            key_start_time=datetime.now(timezone.utc),
+            key_expiry_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        account_name = settings.storage_account_url.split("//")[1].split(".")[0]
+
+        sas_token = generate_blob_sas(
+            account_name=account_name,
+            container_name=DOCUMENTS_CONTAINER,
+            blob_name=blob_path,
+            user_delegation_key=user_delegation_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        download_url = f"{settings.storage_account_url}/{DOCUMENTS_CONTAINER}/{blob_path}?{sas_token}"
+
+        logger.info(f"Generated download SAS URL for container: {DOCUMENTS_CONTAINER}, blob: {blob_path}")
+
+        return download_url
+
 
 azure_storage_service = AzureStorageService()

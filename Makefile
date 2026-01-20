@@ -1,5 +1,8 @@
 .PHONY: build-document-ingestion publish-document-ingestion run-document-ingestion
 .PHONY: db-info db-migrate db-validate db-repair db-baseline db-add
+.PHONY: terraform-apply
+.PHONY: nextjs-run
+.PHONY: api-run
 
 ACR_NAME ?= $(shell cd infrastructure && terraform output -raw container_registry_name 2>/dev/null)
 IMAGE_TAG ?= latest
@@ -47,3 +50,15 @@ db-add:
 		--env-file database/.env \
 		-v $(PWD)/database/migrations:/flyway/sql \
 		flyway/flyway:$(FLYWAY_VERSION) add -description="$(DESC)"
+
+# IAC Terraform
+terraform-apply:
+	terraform -chdir=infrastructure apply --var-file=config/dev.tfvars
+
+# Front End
+nextjs-run:
+	cd app/ui; npm run dev
+
+# Back End
+api-run:
+	cd app/api; uv run uvicorn main:app --reload

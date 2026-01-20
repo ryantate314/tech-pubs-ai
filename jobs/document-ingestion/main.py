@@ -2,12 +2,14 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.queue import QueueClient
+from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
 
 from techpubs_core import (
@@ -17,7 +19,7 @@ from techpubs_core import (
     DocumentVersion,
     get_session,
 )
-from techpubs_core.embeddings import generate_embeddings_batch
+from techpubs_core.embeddings import MODEL_NAME, generate_embeddings_batch
 
 
 def get_credential() -> DefaultAzureCredential:
@@ -45,81 +47,115 @@ def get_queue_client() -> QueueClient:
     )
 
 
-def download_blob(storage_account_url: str, blob_path: str) -> bytes:
-    """Download blob content from Azure Blob Storage."""
+def download_blob_to_file(storage_account_url: str, blob_path: str, file_path: str) -> int:
+    """Download blob content from Azure Blob Storage directly to a file.
+
+    Returns the number of bytes downloaded.
+    """
     credential = get_credential()
     blob_service_client = BlobServiceClient(storage_account_url, credential=credential)
     blob_client = blob_service_client.get_blob_client(DOCUMENTS_CONTAINER, blob_path)
 
-    return blob_client.download_blob().readall()
+    with open(file_path, "wb") as f:
+        stream = blob_client.download_blob()
+        stream.readinto(f)
+        return stream.size
 
 
-def extract_text_chunks(content: bytes, file_name: str) -> list[dict]:
+def extract_text_chunks(file_path: str) -> Iterator[dict]:
     """
-    Extract text chunks from document using Docling.
+    Extract text chunks from document using Docling's HybridChunker.
 
-    Returns list of dicts with 'content', 'page_number', and 'chunk_index' keys.
+    Uses tokenizer-aware chunking that respects document structure (headings,
+    sections, paragraphs) and produces chunks sized appropriately for the
+    embedding model.
+
+    Args:
+        file_path: Path to the document file to process.
+
+    Yields dicts with 'content', 'page_number', and 'chunk_index' keys.
     """
-    chunks = []
+    converter = DocumentConverter()
+    result = converter.convert(file_path)
 
-    # Write content to temp file for Docling processing
-    suffix = Path(file_name).suffix
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
-        tmp_file.write(content)
-        tmp_path = tmp_file.name
+    # Use HybridChunker with tokenizer matching our embedding model
+    # This ensures chunks are properly sized for embedding and respect document structure
+    chunker = HybridChunker(
+        tokenizer=MODEL_NAME,
+        max_tokens=512,
+        merge_peers=True,
+    )
 
-    try:
-        converter = DocumentConverter()
-        result = converter.convert(tmp_path)
+    for chunk_index, chunk in enumerate(chunker.chunk(dl_doc=result.document)):
+        # Use contextualize() to get context-enriched text that includes
+        # heading hierarchy for better semantic search
+        content = chunker.contextualize(chunk)
 
-        # Export as markdown and split into chunks
-        markdown_content = result.document.export_to_markdown()
+        # Extract page number from chunk metadata if available
+        page_number = None
+        if chunk.meta and chunk.meta.doc_items:
+            # Get the page number from the first doc item's provenance
+            for doc_item in chunk.meta.doc_items:
+                if doc_item.prov and len(doc_item.prov) > 0:
+                    page_number = doc_item.prov[0].page_no
+                    break
 
-        # Split into chunks by paragraphs/sections
-        # Keep chunks reasonable size (roughly 500-1000 chars)
-        current_chunk = []
-        current_length = 0
-        chunk_index = 0
-        max_chunk_length = 1000
+        yield {
+            "content": content,
+            "chunk_index": chunk_index,
+            "page_number": page_number,
+        }
 
-        for line in markdown_content.split("\n"):
-            line_length = len(line)
 
-            # If adding this line exceeds max length and we have content, save current chunk
-            if current_length + line_length > max_chunk_length and current_chunk:
-                chunk_text = "\n".join(current_chunk).strip()
-                if chunk_text:
-                    chunks.append(
-                        {
-                            "content": chunk_text,
-                            "chunk_index": chunk_index,
-                            "page_number": None,  # Docling doesn't always provide page numbers in markdown export
-                        }
-                    )
-                    chunk_index += 1
-                current_chunk = []
-                current_length = 0
+def process_and_store_chunks(
+    chunks: Iterator[dict],
+    document_version_id: int,
+    session,
+    batch_size: int = 32,
+) -> int:
+    """
+    Process chunks in batches: generate embeddings and store in database.
 
-            current_chunk.append(line)
-            current_length += line_length + 1  # +1 for newline
+    Streams chunks from the iterator, batching them to efficiently generate
+    embeddings while minimizing memory usage.
 
-        # Don't forget the last chunk
-        if current_chunk:
-            chunk_text = "\n".join(current_chunk).strip()
-            if chunk_text:
-                chunks.append(
-                    {
-                        "content": chunk_text,
-                        "chunk_index": chunk_index,
-                        "page_number": None,
-                    }
-                )
+    Returns the total number of chunks processed.
+    """
+    batch = []
+    total_chunks = 0
 
-    finally:
-        # Clean up temp file
-        os.unlink(tmp_path)
+    for chunk in chunks:
+        batch.append(chunk)
 
-    return chunks
+        if len(batch) >= batch_size:
+            _embed_and_store_batch(batch, document_version_id, session)
+            total_chunks += len(batch)
+            print(f"  Processed {total_chunks} chunks...")
+            batch = []
+
+    # Process any remaining chunks
+    if batch:
+        _embed_and_store_batch(batch, document_version_id, session)
+        total_chunks += len(batch)
+
+    return total_chunks
+
+
+def _embed_and_store_batch(batch: list[dict], document_version_id: int, session) -> None:
+    """Generate embeddings for a batch of chunks and store them in the database."""
+    chunk_texts = [c["content"] for c in batch]
+    embeddings = generate_embeddings_batch(chunk_texts)
+
+    for chunk, embedding in zip(batch, embeddings):
+        document_chunk = DocumentChunk(
+            document_version_id=document_version_id,
+            chunk_index=chunk["chunk_index"],
+            content=chunk["content"],
+            embedding=embedding,
+            token_count=len(chunk["content"].split()),
+            page_number=chunk["page_number"],
+        )
+        session.add(document_chunk)
 
 
 def process_document_job(job_id: int) -> None:
@@ -161,43 +197,31 @@ def process_document_job(job_id: int) -> None:
         # Mark job as running
         job.status = "running"
         job.started_at = datetime.now()
-        session.flush()
+        session.commit()  # Commit immediately so status is visible to other connections
+
+        # Create temp file for download
+        suffix = Path(document_version.file_name).suffix
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+            tmp_path = tmp_file.name
 
         try:
-            # Download the blob
+            # Download the blob directly to temp file
             print("Downloading blob...")
-            content = download_blob(storage_account_url, document_version.blob_path)
-            print(f"Downloaded {len(content)} bytes")
+            bytes_downloaded = download_blob_to_file(
+                storage_account_url, document_version.blob_path, tmp_path
+            )
+            print(f"Downloaded {bytes_downloaded} bytes")
 
-            # Extract text chunks
-            print("Extracting text chunks...")
-            chunks = extract_text_chunks(content, document_version.file_name)
-            print(f"Extracted {len(chunks)} chunks")
+            # Extract chunks, generate embeddings, and store in database
+            print("Processing document chunks...")
+            total_chunks = process_and_store_chunks(
+                chunks=extract_text_chunks(tmp_path),
+                document_version_id=document_version.id,
+                session=session,
+            )
 
-            if not chunks:
-                print("No text chunks extracted, marking job as completed")
-                job.status = "completed"
-                job.completed_at = datetime.now()
-                return
-
-            # Generate embeddings
-            print("Generating embeddings...")
-            chunk_texts = [chunk["content"] for chunk in chunks]
-            embeddings = generate_embeddings_batch(chunk_texts)
-            print(f"Generated {len(embeddings)} embeddings")
-
-            # Store chunks with embeddings
-            print("Storing chunks in database...")
-            for chunk, embedding in zip(chunks, embeddings):
-                document_chunk = DocumentChunk(
-                    document_version_id=document_version.id,
-                    chunk_index=chunk["chunk_index"],
-                    content=chunk["content"],
-                    embedding=embedding,
-                    token_count=len(chunk["content"].split()),  # Approximate token count
-                    page_number=chunk["page_number"],
-                )
-                session.add(document_chunk)
+            if total_chunks == 0:
+                print("No text chunks extracted")
 
             # Mark job as completed
             job.status = "completed"
@@ -205,13 +229,18 @@ def process_document_job(job_id: int) -> None:
 
             print(f"Successfully processed job {job_id}")
             print(f"  - Document Version ID: {document_version.id}")
-            print(f"  - Chunks stored: {len(chunks)}")
+            print(f"  - Chunks stored: {total_chunks}")
 
         except Exception as e:
             job.status = "failed"
             job.error_message = str(e)
             job.completed_at = datetime.now()
             raise
+
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
 
 def process_queue_message(message_content: str) -> int:
