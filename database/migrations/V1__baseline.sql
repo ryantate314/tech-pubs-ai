@@ -1,8 +1,8 @@
 -- Baseline migration: Combined schema from initial migrations
 -- This represents the complete database schema as of the Flyway integration
 
--- Enable pgvector extension
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: pgvector extension must be created by an admin before running migrations:
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Aircraft models lookup table
 CREATE TABLE aircraft_models (

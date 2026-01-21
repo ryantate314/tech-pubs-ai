@@ -107,6 +107,7 @@ class DocumentChunk(Base):
     embedding = mapped_column(Vector(768), nullable=True)  # BAAI/bge-base-en-v1.5 dimension
     token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    chapter_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
 
     document_version: Mapped["DocumentVersion"] = relationship(back_populates="chunks")

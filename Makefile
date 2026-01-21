@@ -18,6 +18,7 @@ FLYWAY_VERSION ?= 11
 FLYWAY_CMD = docker run --rm \
 	--env-file database/.env \
 	-v $(PWD)/database/migrations:/flyway/sql:ro \
+	--network host \
 	flyway/flyway:$(FLYWAY_VERSION)
 
 # Base image (shared PyTorch + CUDA)
@@ -85,6 +86,7 @@ db-add:
 	docker run --rm \
 		--env-file database/.env \
 		-v $(PWD)/database/migrations:/flyway/sql \
+		--network host \
 		flyway/flyway:$(FLYWAY_VERSION) add -description="$(DESC)"
 
 # IAC Terraform

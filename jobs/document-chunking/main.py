@@ -1,11 +1,13 @@
 import json
 import os
+import re
 import sys
 import tempfile
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
+import fitz  # PyMuPDF
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.queue import QueueClient
@@ -22,9 +24,14 @@ from techpubs_core import (
 # Embedding model name (used for tokenizer in chunking)
 # Defined here to avoid importing sentence-transformers
 EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
+EMBEDDING_MODEL_MAX_TOKENS = 512
 
 # Batch size for embedding jobs (number of chunks per job)
 EMBEDDING_BATCH_SIZE = 100
+
+# Thresholds for determining large PDFs (configurable via env vars)
+LARGE_PDF_PAGE_THRESHOLD = int(os.environ.get("LARGE_PDF_PAGE_THRESHOLD", "100"))
+LARGE_PDF_SIZE_MB_THRESHOLD = int(os.environ.get("LARGE_PDF_SIZE_MB_THRESHOLD", "10"))
 
 
 def get_credential() -> DefaultAzureCredential:
@@ -84,7 +91,83 @@ def download_blob_to_file(storage_account_url: str, blob_path: str, file_path: s
         return stream.size
 
 
-def extract_text_chunks(file_path: str) -> Iterator[dict]:
+def analyze_pdf(file_path: str) -> dict:
+    """Analyze PDF for size and TOC to determine chunking strategy."""
+    doc = fitz.open(file_path)
+    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+    toc = doc.get_toc()  # [[level, title, page], ...]
+    page_count = len(doc)
+
+    is_large = page_count > LARGE_PDF_PAGE_THRESHOLD or file_size_mb > LARGE_PDF_SIZE_MB_THRESHOLD
+
+    # Filter to top-level chapters (level 1)
+    chapters = [{"title": t[1], "page": t[2]} for t in toc if t[0] == 1]
+    has_valid_toc = len(chapters) >= 2
+
+    doc.close()
+
+    return {
+        "page_count": page_count,
+        "file_size_mb": file_size_mb,
+        "is_large": is_large,
+        "has_toc": has_valid_toc,
+        "chapters": chapters,
+    }
+
+
+def extract_chapter_pdf(source_path: str, start_page: int, end_page: int) -> str:
+    """Extract page range to temp PDF file. Returns temp file path."""
+    doc = fitz.open(source_path)
+    new_doc = fitz.open()
+    new_doc.insert_pdf(doc, from_page=start_page - 1, to_page=end_page - 1)
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        new_doc.save(tmp.name)
+        new_doc.close()
+        doc.close()
+        return tmp.name
+
+
+def extract_text_chunks_simple(file_path: str, max_tokens: int = 400) -> Iterator[dict]:
+    """Page-based text extraction with sentence-boundary chunking.
+
+    Used for large PDFs without a valid TOC.
+    """
+    doc = fitz.open(file_path)
+    chunk_index = 0
+
+    for page_num in range(len(doc)):
+        text = doc[page_num].get_text("text")
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+
+        current_chunk = []
+        current_tokens = 0
+
+        for sentence in sentences:
+            tokens = len(sentence.split())
+            if current_tokens + tokens > max_tokens and current_chunk:
+                yield {
+                    "content": " ".join(current_chunk),
+                    "chunk_index": chunk_index,
+                    "page_number": page_num + 1,
+                }
+                chunk_index += 1
+                current_chunk, current_tokens = [], 0
+            current_chunk.append(sentence)
+            current_tokens += tokens
+
+        if current_chunk:
+            yield {
+                "content": " ".join(current_chunk),
+                "chunk_index": chunk_index,
+                "page_number": page_num + 1,
+            }
+            chunk_index += 1
+
+    doc.close()
+
+
+def extract_text_chunks_docling(file_path: str) -> Iterator[dict]:
     """
     Extract text chunks from document using Docling's HybridChunker.
 
@@ -102,17 +185,27 @@ def extract_text_chunks(file_path: str) -> Iterator[dict]:
 
     # Use HybridChunker with tokenizer matching our embedding model
     # This ensures chunks are properly sized for embedding and respect document structure
-    # Use 400 max_tokens to leave room for heading context added by contextualize()
+    # Use 300 max_tokens to leave room for heading context added by contextualize()
     chunker = HybridChunker(
         tokenizer=EMBEDDING_MODEL_NAME,
-        max_tokens=400,
+        max_tokens=300,
         merge_peers=True,
     )
+
+    # Get the tokenizer for truncating contextualized content
+    tokenizer = chunker.tokenizer
 
     for chunk_index, chunk in enumerate(chunker.chunk(dl_doc=result.document)):
         # Use contextualize() to get context-enriched text that includes
         # heading hierarchy for better semantic search
         content = chunker.contextualize(chunk)
+
+        # Truncate to model's max sequence length if needed
+        # This can happen when contextualize() adds long heading hierarchies
+        tokens = tokenizer.tokenize(content)
+        if len(tokens) > EMBEDDING_MODEL_MAX_TOKENS:
+            tokens = tokens[:EMBEDDING_MODEL_MAX_TOKENS]
+            content = tokenizer.convert_tokens_to_string(tokens)
 
         # Extract page number from chunk metadata if available
         page_number = None
@@ -128,6 +221,63 @@ def extract_text_chunks(file_path: str) -> Iterator[dict]:
             "chunk_index": chunk_index,
             "page_number": page_number,
         }
+
+
+def extract_text_chunks_by_chapter(file_path: str, analysis: dict) -> Iterator[dict]:
+    """Process chapters sequentially with Docling.
+
+    Splits large PDFs by TOC chapters and processes each chapter separately
+    to avoid memory issues with very large documents.
+    """
+    chapters = analysis["chapters"]
+    total_pages = analysis["page_count"]
+    chunk_index = 0
+
+    for i, chapter in enumerate(chapters):
+        start_page = chapter["page"]
+        end_page = chapters[i + 1]["page"] - 1 if i + 1 < len(chapters) else total_pages
+
+        print(f"  Processing chapter: {chapter['title']} (pages {start_page}-{end_page})")
+        chapter_path = extract_chapter_pdf(file_path, start_page, end_page)
+
+        try:
+            for chunk in extract_text_chunks_docling(chapter_path):
+                yield {
+                    "content": chunk["content"],
+                    "chunk_index": chunk_index,
+                    "page_number": chunk["page_number"],
+                    "chapter_title": chapter["title"],
+                }
+                chunk_index += 1
+        finally:
+            os.unlink(chapter_path)
+
+
+def extract_text_chunks(file_path: str) -> Iterator[dict]:
+    """Extract chunks using strategy based on PDF size and TOC.
+
+    Routes to one of three strategies:
+    - Small PDFs: Use Docling directly
+    - Large PDFs with TOC: Split by chapter, process each with Docling
+    - Large PDFs without TOC: Use simple page-based chunking
+    """
+    analysis = analyze_pdf(file_path)
+    print(f"PDF analysis: {analysis['page_count']} pages, {analysis['file_size_mb']:.1f}MB, TOC: {analysis['has_toc']}")
+
+    if not analysis["is_large"]:
+        # Small PDF: use Docling directly
+        print("Strategy: Docling (small PDF)")
+        yield from extract_text_chunks_docling(file_path)
+
+    elif analysis["has_toc"]:
+        # Large PDF with TOC: split by chapter
+        print(f"Strategy: Chapter-based ({len(analysis['chapters'])} chapters)")
+        yield from extract_text_chunks_by_chapter(file_path, analysis)
+
+    else:
+        # Large PDF without TOC: simple chunking
+        print("Strategy: Simple page-based (large PDF, no TOC)")
+        yield from extract_text_chunks_simple(file_path)
 
 
 def store_chunks_without_embeddings(
@@ -150,6 +300,7 @@ def store_chunks_without_embeddings(
             embedding=None,  # Will be filled in by embedding job
             token_count=len(chunk["content"].split()),
             page_number=chunk["page_number"],
+            chapter_title=chunk.get("chapter_title"),
         )
         session.add(document_chunk)
         stored_chunks.append(document_chunk)
