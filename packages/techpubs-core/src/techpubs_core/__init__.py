@@ -7,9 +7,13 @@ from techpubs_core.models import (
     Base,
     Category,
     Document,
+    DocumentCategory,
     DocumentChunk,
     DocumentJob,
+    DocumentType,
     DocumentVersion,
+    Generation,
+    Platform,
 )
 
 __all__ = [
@@ -17,9 +21,13 @@ __all__ = [
     "Base",
     "Category",
     "Document",
+    "DocumentCategory",
     "DocumentChunk",
     "DocumentJob",
+    "DocumentType",
     "DocumentVersion",
+    "Generation",
+    "Platform",
     "DOCUMENTS_CONTAINER",
     "get_engine",
     "get_session",

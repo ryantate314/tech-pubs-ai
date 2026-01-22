@@ -22,6 +22,62 @@ class AircraftModel(Base):
     documents: Mapped[list["Document"]] = relationship(back_populates="aircraft_model")
 
 
+class Platform(Base):
+    __tablename__ = "platforms"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    code: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    generations: Mapped[list["Generation"]] = relationship(back_populates="platform")
+    documents: Mapped[list["Document"]] = relationship(back_populates="platform")
+
+
+class Generation(Base):
+    __tablename__ = "generations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    platform_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("platforms.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(10), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    platform: Mapped["Platform"] = relationship(back_populates="generations")
+    documents: Mapped[list["Document"]] = relationship(back_populates="generation")
+
+
+class DocumentCategory(Base):
+    __tablename__ = "document_categories"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    document_types: Mapped[list["DocumentType"]] = relationship(back_populates="document_category")
+
+
+class DocumentType(Base):
+    __tablename__ = "document_types"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    document_category_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_categories.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    document_category: Mapped["DocumentCategory"] = relationship(back_populates="document_types")
+    documents: Mapped[list["Document"]] = relationship(back_populates="document_type")
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -42,12 +98,18 @@ class Document(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     aircraft_model_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("aircraft_models.id"), nullable=True)
     category_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=True)
+    platform_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("platforms.id"), nullable=True)
+    generation_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("generations.id"), nullable=True)
+    document_type_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("document_types.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     aircraft_model: Mapped[Optional["AircraftModel"]] = relationship(back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship(back_populates="documents")
+    platform: Mapped[Optional["Platform"]] = relationship(back_populates="documents")
+    generation: Mapped[Optional["Generation"]] = relationship(back_populates="documents")
+    document_type: Mapped[Optional["DocumentType"]] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
 
 
