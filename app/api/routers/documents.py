@@ -1,7 +1,9 @@
+from typing import Optional
+
 from sqlalchemy import func
 from sqlalchemy.orm import aliased
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from techpubs_core.database import get_session
 from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentVersion
@@ -19,7 +21,11 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 @router.get("", response_model=DocumentListResponse)
-def list_documents() -> DocumentListResponse:
+def list_documents(
+    platform_id: Optional[int] = Query(None, description="Filter by platform ID"),
+    generation_id: Optional[int] = Query(None, description="Filter by generation ID"),
+    document_type_id: Optional[int] = Query(None, description="Filter by document type ID"),
+) -> DocumentListResponse:
     """List all documents with their latest job status."""
     with get_session() as session:
         # Subquery to get the latest document_version_id for each document
@@ -72,8 +78,19 @@ def list_documents() -> DocumentListResponse:
                 latest_job_subq.c.latest_job_id == LatestJob.id,
             )
             .filter(Document.deleted_at.is_(None))
-            .order_by(Document.created_at.desc())
         )
+
+        # Apply optional filters
+        if platform_id is not None:
+            query = query.filter(Document.platform_id == platform_id)
+
+        if generation_id is not None:
+            query = query.filter(Document.generation_id == generation_id)
+
+        if document_type_id is not None:
+            query = query.filter(Document.document_type_id == document_type_id)
+
+        query = query.order_by(Document.created_at.desc())
 
         results = query.all()
 
