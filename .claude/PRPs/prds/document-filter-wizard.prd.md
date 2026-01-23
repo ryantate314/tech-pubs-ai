@@ -131,7 +131,7 @@ When I need technical documentation for my aircraft, I want to quickly filter to
 |---|-------|-------------|--------|----------|---------|----------|
 | 1 | Database & Models | Flyway migration, SQLAlchemy models | complete | - | - | [plan](../plans/wizard-phase1-database-models.plan.md) |
 | 2 | API Endpoints | Platform, generation, category, type endpoints + document filtering | complete | - | 1 | [plan](../plans/completed/wizard-phase2-api-endpoints.plan.md) |
-| 3 | Wizard UI | React components for all 4 steps + results | pending | - | 2 | - |
+| 3 | Wizard UI | React components for all 4 steps + results | complete | - | 2 | [plan](../plans/completed/wizard-phase3-wizard-ui.plan.md) |
 | 4 | Admin Integration | Update upload form with new classification fields | pending | - | 2 | - |
 | 5 | Polish & QA | URL state, animations, mobile, accessibility | pending | - | 3 | - |
 
