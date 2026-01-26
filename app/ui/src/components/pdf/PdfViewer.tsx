@@ -182,6 +182,14 @@ export default function PdfViewer({
     }
   }, []);
 
+  // Handle internal link clicks within the PDF
+  const handleItemClick = useCallback(
+    ({ pageNumber }: { pageNumber: number }) => {
+      setCurrentPage(pageNumber);
+    },
+    []
+  );
+
   const renderOutlineItems = (
     items: OutlineItem[],
     level: number = 0
@@ -410,6 +418,7 @@ export default function PdfViewer({
               onLoadSuccess={onDocumentLoadSuccess}
               onLoadError={onDocumentLoadError}
               onLoadProgress={onLoadProgress}
+              onItemClick={handleItemClick}
               loading={
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
