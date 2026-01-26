@@ -133,7 +133,7 @@ When I need technical documentation for my aircraft, I want to quickly filter to
 | 2 | API Endpoints | Platform, generation, category, type endpoints + document filtering | complete | - | 1 | [plan](../plans/completed/wizard-phase2-api-endpoints.plan.md) |
 | 3 | Wizard UI | React components for all 4 steps + results | complete | - | 2 | [plan](../plans/completed/wizard-phase3-wizard-ui.plan.md) |
 | 4 | Admin Integration | Update upload form with new classification fields | complete | - | 2 | [plan](../plans/completed/wizard-phase4-admin-integration.plan.md) |
-| 5 | Polish & QA | URL state, animations, mobile, accessibility | pending | - | 3 | - |
+| 5 | Polish & QA | URL state, animations, mobile, accessibility | complete | - | 3 | [plan](../plans/completed/wizard-phase5-polish-qa.plan.md) |
 
 ### Phase Details
 

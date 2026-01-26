@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { serverFetch } from "@/lib/api/server";
 import type { DocumentListResponse } from "@/types/documents";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const data = await serverFetch<DocumentListResponse>("/api/documents");
+    const searchParams = request.nextUrl.searchParams;
+    const queryString = searchParams.toString();
+    const endpoint = `/api/documents${queryString ? `?${queryString}` : ""}`;
+
+    const data = await serverFetch<DocumentListResponse>(endpoint);
     return NextResponse.json(data);
   } catch (error) {
     const message =

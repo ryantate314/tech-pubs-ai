@@ -29,4 +29,4 @@ export interface DocumentType {
   display_order: number;
 }
 
-export type WizardStep = "platform" | "generation" | "category" | "type" | "results";
+export type WizardStep = "platform" | "generation" | "category" | "results";

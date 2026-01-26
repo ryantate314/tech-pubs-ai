@@ -2,18 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Platform, Generation, DocumentCategory, DocumentType, WizardStep } from "@/types/wizard";
+import type { Platform, Generation, DocumentCategory, WizardStep } from "@/types/wizard";
 import {
   fetchPlatformById,
   fetchGenerationById,
   fetchDocumentCategoryById,
-  fetchDocumentTypeById,
 } from "@/lib/api/wizard";
 import { StepIndicator } from "./StepIndicator";
 import { PlatformSelector } from "./PlatformSelector";
 import { GenerationSelector } from "./GenerationSelector";
 import { CategorySelector } from "./CategorySelector";
-import { TypeSelector } from "./TypeSelector";
 import { WizardResults } from "./WizardResults";
 
 export function WizardContainer() {
@@ -30,7 +28,6 @@ export function WizardContainer() {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [generation, setGeneration] = useState<Generation | null>(null);
   const [category, setCategory] = useState<DocumentCategory | null>(null);
-  const [type, setType] = useState<DocumentType | null>(null);
 
   // Loading state for URL restoration
   const [isHydrating, setIsHydrating] = useState(true);
@@ -51,7 +48,6 @@ export function WizardContainer() {
             setPlatform(null);
             setGeneration(null);
             setCategory(null);
-            setType(null);
             setIsHydrating(false);
           }
           return;
@@ -80,7 +76,6 @@ export function WizardContainer() {
             // Invalid generation ID - go back to platform selection
             setGeneration(null);
             setCategory(null);
-            setType(null);
             router.replace(`/wizard?platform=${platformId}`);
             return;
           }
@@ -88,7 +83,6 @@ export function WizardContainer() {
         } else {
           setGeneration(null);
           setCategory(null);
-          setType(null);
           setIsHydrating(false);
           return;
         }
@@ -101,37 +95,14 @@ export function WizardContainer() {
           if (!fetchedCategory) {
             // Invalid category ID - go back to generation selection
             setCategory(null);
-            setType(null);
             router.replace(`/wizard?platform=${platformId}&generation=${generationId}`);
             return;
           }
           setCategory(fetchedCategory);
         } else {
           setCategory(null);
-          setType(null);
           setIsHydrating(false);
           return;
-        }
-
-        // Fetch type if ID in URL
-        if (typeId) {
-          const fetchedType = await fetchDocumentTypeById(
-            Number(categoryId),
-            Number(typeId)
-          );
-          if (cancelled) return;
-
-          if (!fetchedType) {
-            // Invalid type ID - go back to category selection
-            setType(null);
-            router.replace(
-              `/wizard?platform=${platformId}&generation=${generationId}&category=${categoryId}`
-            );
-            return;
-          }
-          setType(fetchedType);
-        } else {
-          setType(null);
         }
       } catch (err) {
         if (!cancelled) {
@@ -152,16 +123,15 @@ export function WizardContainer() {
     return () => {
       cancelled = true;
     };
-  }, [platformId, generationId, categoryId, typeId, router]);
+  }, [platformId, generationId, categoryId, router]);
 
   // Determine current step based on state (not URL params)
   const currentStep: WizardStep = useMemo(() => {
-    if (type) return "results";
-    if (category) return "type";
+    if (category) return "results";
     if (generation) return "category";
     if (platform) return "generation";
     return "platform";
-  }, [platform, generation, category, type]);
+  }, [platform, generation, category]);
 
   // Navigation handlers - update both state and URL
   const handlePlatformSelect = useCallback(
@@ -169,7 +139,6 @@ export function WizardContainer() {
       setPlatform(selected);
       setGeneration(null);
       setCategory(null);
-      setType(null);
       router.push(`/wizard?platform=${selected.id}`);
     },
     [router]
@@ -179,7 +148,6 @@ export function WizardContainer() {
     (selected: Generation) => {
       setGeneration(selected);
       setCategory(null);
-      setType(null);
       router.push(`/wizard?platform=${platformId}&generation=${selected.id}`);
     },
     [router, platformId]
@@ -188,7 +156,6 @@ export function WizardContainer() {
   const handleCategorySelect = useCallback(
     (selected: DocumentCategory) => {
       setCategory(selected);
-      setType(null);
       router.push(
         `/wizard?platform=${platformId}&generation=${generationId}&category=${selected.id}`
       );
@@ -196,42 +163,52 @@ export function WizardContainer() {
     [router, platformId, generationId]
   );
 
-  const handleTypeSelect = useCallback(
-    (selected: DocumentType) => {
-      setType(selected);
-      router.push(
-        `/wizard?platform=${platformId}&generation=${generationId}&category=${categoryId}&type=${selected.id}`
-      );
-    },
-    [router, platformId, generationId, categoryId]
-  );
-
   const handleBackToGeneration = useCallback(() => {
     setCategory(null);
-    setType(null);
     router.push(`/wizard?platform=${platformId}`);
   }, [router, platformId]);
 
-  const handleBackToCategory = useCallback(() => {
-    setType(null);
+  const handleBackFromResults = useCallback(() => {
+    setCategory(null);
     router.push(`/wizard?platform=${platformId}&generation=${generationId}`);
   }, [router, platformId, generationId]);
+
+  const handleTypeFilterChange = useCallback(
+    (selectedTypeId: number | null) => {
+      const base = `/wizard?platform=${platformId}&generation=${generationId}&category=${categoryId}`;
+      router.push(selectedTypeId ? `${base}&type=${selectedTypeId}` : base);
+    },
+    [router, platformId, generationId, categoryId]
+  );
 
   const handleStartOver = useCallback(() => {
     setPlatform(null);
     setGeneration(null);
     setCategory(null);
-    setType(null);
     router.push("/wizard");
   }, [router]);
 
   // Show loading during URL hydration
   if (isHydrating) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Loading...
-        </p>
+      <div className="space-y-8">
+        <div className="flex items-center justify-center gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="h-8 w-8 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
+              <div className="hidden h-4 w-16 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700 sm:block" />
+              {i < 3 && <div className="h-0.5 w-8 bg-zinc-200 dark:bg-zinc-700" />}
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="animate-pulse rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+              <div className="h-6 w-24 rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="mt-2 h-4 w-16 rounded bg-zinc-200 dark:bg-zinc-700" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -254,8 +231,15 @@ export function WizardContainer() {
   }
 
   return (
-    <div className="space-y-8">
+    <div role="main" aria-label="Document wizard" className="space-y-8">
       <StepIndicator currentStep={currentStep} />
+
+      <div aria-live="polite" className="sr-only">
+        {currentStep === "platform" && "Step 1 of 3: Select your aircraft platform"}
+        {currentStep === "generation" && `Step 2 of 3: Select generation for ${platform?.name}`}
+        {currentStep === "category" && "Step 3 of 3: Select document category"}
+        {currentStep === "results" && `Showing results for ${platform?.name} ${generation?.name} ${category?.name}`}
+      </div>
 
       {currentStep === "platform" && (
         <PlatformSelector onSelect={handlePlatformSelect} />
@@ -278,21 +262,14 @@ export function WizardContainer() {
         />
       )}
 
-      {currentStep === "type" && platform && generation && category && (
-        <TypeSelector
-          platform={platform}
-          generation={generation}
-          category={category}
-          onSelect={handleTypeSelect}
-          onBack={handleBackToCategory}
-        />
-      )}
-
-      {currentStep === "results" && platform && generation && category && type && (
+      {currentStep === "results" && platform && generation && category && (
         <WizardResults
           platform={platform}
           generation={generation}
-          type={type}
+          category={category}
+          selectedTypeId={typeId ? Number(typeId) : null}
+          onTypeFilterChange={handleTypeFilterChange}
+          onBack={handleBackFromResults}
           onStartOver={handleStartOver}
         />
       )}
