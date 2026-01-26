@@ -10,8 +10,8 @@ export interface DocumentListItem {
   guid: string;
   name: string;
   aircraft_model_code: string | null;
-  category_name: string | null;
   latest_job_status: DocumentJobStatus | null;
+  serial_ranges: SerialRangeResponse[];
   created_at: string;
 }
 

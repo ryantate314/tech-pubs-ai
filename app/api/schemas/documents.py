@@ -4,13 +4,23 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 
+class SerialRangeResponse(BaseModel):
+    id: int
+    range_type: Literal["single", "range", "and_subs"]
+    serial_start: int
+    serial_end: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
 class DocumentListItem(BaseModel):
     id: int
     guid: str
     name: str
     aircraft_model_code: Optional[str] = None
-    category_name: Optional[str] = None
     latest_job_status: Optional[str] = None
+    serial_ranges: list[SerialRangeResponse] = []
     created_at: datetime
 
     class Config:
@@ -29,16 +39,6 @@ class DocumentVersionDetail(BaseModel):
     content_type: Optional[str] = None
     file_size: Optional[int] = None
     blob_path: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class SerialRangeResponse(BaseModel):
-    id: int
-    range_type: Literal["single", "range", "and_subs"]
-    serial_start: int
-    serial_end: Optional[int] = None
 
     class Config:
         from_attributes = True

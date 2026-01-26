@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { serverFetch } from "@/lib/api/server";
+import { formatSerialRanges } from "@/lib/formatters";
 import type { DocumentDetailResponse } from "@/types/documents";
 import DocumentViewerContainer from "@/components/pdf/DocumentViewerContainer";
 
@@ -46,19 +47,17 @@ export default async function DocumentDetailPage({
           </span>
         </div>
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">
-          {document?.name || "Document Viewer"} {document?.latest_version?.name || ""}
+          {document?.name || "Document Viewer"}
         </h1>
         {document && (
           <div className="flex items-center gap-4 mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            {document.latest_version && (
+              <span>Version: {document.latest_version.name}</span>
+            )}
             {document.aircraft_model_code && (
               <span>Model: {document.aircraft_model_code}</span>
             )}
-            {document.category_name && (
-              <span>Category: {document.category_name}</span>
-            )}
-            {document.latest_version?.file_name && (
-              <span>File: {document.latest_version.file_name}</span>
-            )}
+            <span>Serial Numbers: {formatSerialRanges(document.serial_ranges)}</span>
           </div>
         )}
       </div>

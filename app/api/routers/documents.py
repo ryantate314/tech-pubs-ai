@@ -54,12 +54,10 @@ def list_documents() -> DocumentListResponse:
                 Document.guid,
                 Document.name,
                 AircraftModel.code.label("aircraft_model_code"),
-                Category.name.label("category_name"),
                 LatestJob.status.label("latest_job_status"),
                 Document.created_at,
             )
             .outerjoin(AircraftModel, Document.aircraft_model_id == AircraftModel.id)
-            .outerjoin(Category, Document.category_id == Category.id)
             .outerjoin(
                 latest_version_subq,
                 Document.id == latest_version_subq.c.document_id,
@@ -78,14 +76,35 @@ def list_documents() -> DocumentListResponse:
 
         results = query.all()
 
+        # Get all document IDs to fetch serial ranges
+        doc_ids = [row.id for row in results]
+
+        # Fetch all serial ranges for these documents
+        serial_ranges_by_doc: dict[int, list[SerialRangeResponse]] = {doc_id: [] for doc_id in doc_ids}
+        if doc_ids:
+            all_serial_ranges = (
+                session.query(DocumentSerialRange)
+                .filter(DocumentSerialRange.document_id.in_(doc_ids))
+                .all()
+            )
+            for sr in all_serial_ranges:
+                serial_ranges_by_doc[sr.document_id].append(
+                    SerialRangeResponse(
+                        id=sr.id,
+                        range_type=sr.range_type,
+                        serial_start=sr.serial_start,
+                        serial_end=sr.serial_end,
+                    )
+                )
+
         documents = [
             DocumentListItem(
                 id=row.id,
                 guid=str(row.guid),
                 name=row.name,
                 aircraft_model_code=row.aircraft_model_code,
-                category_name=row.category_name,
                 latest_job_status=row.latest_job_status,
+                serial_ranges=serial_ranges_by_doc.get(row.id, []),
                 created_at=row.created_at,
             )
             for row in results
