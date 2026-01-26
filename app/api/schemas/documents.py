@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -34,6 +34,16 @@ class DocumentVersionDetail(BaseModel):
         from_attributes = True
 
 
+class SerialRangeResponse(BaseModel):
+    id: int
+    range_type: Literal["single", "range", "and_subs"]
+    serial_start: int
+    serial_end: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
 class DocumentDetailResponse(BaseModel):
     guid: str
     name: str
@@ -42,6 +52,7 @@ class DocumentDetailResponse(BaseModel):
     category_id: Optional[int] = None
     category_name: Optional[str] = None
     latest_version: Optional[DocumentVersionDetail] = None
+    serial_ranges: list[SerialRangeResponse] = []
 
     class Config:
         from_attributes = True

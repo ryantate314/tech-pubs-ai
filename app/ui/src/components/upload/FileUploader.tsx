@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AircraftModel } from "@/types/aircraft-models";
 import type { Category } from "@/types/categories";
 import type { DocumentDetailResponse } from "@/types/documents";
-import type { UploadProgress, UploadStatus } from "@/types/uploads";
+import type { SerialRangeInput, UploadProgress, UploadStatus } from "@/types/uploads";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { fetchCategories } from "@/lib/api/categories";
 import { fetchDocument } from "@/lib/api/documents";
@@ -13,6 +13,7 @@ import {
   requestUploadUrl,
   uploadFileToBlob,
 } from "@/lib/api/uploads";
+import { SerialRangeEditor } from "./SerialRangeEditor";
 import { UploadDropzone } from "./UploadDropzone";
 import { UploadProgressDisplay } from "./UploadProgress";
 
@@ -48,6 +49,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
   );
   const [documentName, setDocumentName] = useState("");
   const [versionName, setVersionName] = useState("");
+  const [serialRanges, setSerialRanges] = useState<SerialRangeInput[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
@@ -161,6 +163,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         category_id: selectedCategoryId,
         version_name: versionName.trim(),
         document_guid: documentGuid,
+        serial_ranges: !documentGuid && serialRanges.length > 0 ? serialRanges : undefined,
       });
 
       setUploadStatus("uploading");
@@ -183,6 +186,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         category_id: selectedCategoryId,
         version_name: versionName.trim(),
         document_guid: documentGuid,
+        serial_ranges: !documentGuid && serialRanges.length > 0 ? serialRanges : undefined,
       });
 
       setUploadStatus("success");
@@ -203,6 +207,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     setVersionName("");
     if (!documentGuid) {
       setDocumentName("");
+      setSerialRanges([]);
     }
     setUploadStatus("idle");
     setUploadProgress(null);
@@ -365,6 +370,31 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
           className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
         />
       </div>
+
+      {isAddingVersion && existingDocument?.serial_ranges && existingDocument.serial_ranges.length > 0 ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Serial Number Ranges
+          </label>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
+            <ul className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+              {existingDocument.serial_ranges.map((range) => (
+                <li key={range.id}>
+                  {range.range_type === "single" && `Serial ${range.serial_start}`}
+                  {range.range_type === "range" && `Serials ${range.serial_start} to ${range.serial_end}`}
+                  {range.range_type === "and_subs" && `Serial ${range.serial_start} and subsequent`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : !isAddingVersion ? (
+        <SerialRangeEditor
+          ranges={serialRanges}
+          onChange={setSerialRanges}
+          disabled={isUploading}
+        />
+      ) : null}
 
       {!selectedFile && uploadStatus === "idle" && (
         <UploadDropzone

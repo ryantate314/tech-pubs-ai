@@ -1,6 +1,23 @@
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+class SerialRangeInput(BaseModel):
+    range_type: Literal["single", "range", "and_subs"]
+    serial_start: int
+    serial_end: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_serial_end(self) -> "SerialRangeInput":
+        if self.range_type == "range":
+            if self.serial_end is None:
+                raise ValueError("serial_end is required for range type")
+            if self.serial_end < self.serial_start:
+                raise ValueError("serial_end must be >= serial_start")
+        elif self.serial_end is not None:
+            raise ValueError("serial_end must be None for single and and_subs types")
+        return self
 
 
 class UploadUrlRequest(BaseModel):
@@ -12,6 +29,7 @@ class UploadUrlRequest(BaseModel):
     category_id: int
     version_name: str
     document_guid: Optional[str] = None
+    serial_ranges: Optional[list[SerialRangeInput]] = None
 
 
 class UploadUrlResponse(BaseModel):
@@ -29,6 +47,7 @@ class UploadCompleteRequest(BaseModel):
     category_id: int
     version_name: str
     document_guid: Optional[str] = None
+    serial_ranges: Optional[list[SerialRangeInput]] = None
 
 
 class UploadCompleteResponse(BaseModel):

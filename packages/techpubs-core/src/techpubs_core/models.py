@@ -49,6 +49,7 @@ class Document(Base):
     aircraft_model: Mapped[Optional["AircraftModel"]] = relationship(back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
+    serial_ranges: Mapped[list["DocumentSerialRange"]] = relationship(back_populates="document")
 
 
 class DocumentVersion(Base):
@@ -111,3 +112,17 @@ class DocumentChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
 
     document_version: Mapped["DocumentVersion"] = relationship(back_populates="chunks")
+
+
+class DocumentSerialRange(Base):
+    __tablename__ = "document_serial_ranges"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    document_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("documents.id"), nullable=False)
+    range_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    serial_start: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    serial_end: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
+
+    document: Mapped["Document"] = relationship(back_populates="serial_ranges")

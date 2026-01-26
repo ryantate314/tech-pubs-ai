@@ -4,7 +4,7 @@ from sqlalchemy.orm import aliased
 from fastapi import APIRouter, HTTPException
 
 from techpubs_core.database import get_session
-from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentVersion
+from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentSerialRange, DocumentVersion
 
 from schemas.documents import (
     DocumentDetailResponse,
@@ -12,6 +12,7 @@ from schemas.documents import (
     DocumentListItem,
     DocumentListResponse,
     DocumentVersionDetail,
+    SerialRangeResponse,
 )
 from services.azure_storage import azure_storage_service
 
@@ -146,6 +147,22 @@ def get_document(guid: str) -> DocumentDetailResponse:
                 blob_path=latest_version.blob_path,
             )
 
+        # Get serial ranges
+        serial_ranges = (
+            session.query(DocumentSerialRange)
+            .filter(DocumentSerialRange.document_id == document.id)
+            .all()
+        )
+        serial_range_responses = [
+            SerialRangeResponse(
+                id=sr.id,
+                range_type=sr.range_type,
+                serial_start=sr.serial_start,
+                serial_end=sr.serial_end,
+            )
+            for sr in serial_ranges
+        ]
+
         return DocumentDetailResponse(
             guid=str(document.guid),
             name=document.name,
@@ -154,6 +171,7 @@ def get_document(guid: str) -> DocumentDetailResponse:
             category_id=document.category_id,
             category_name=category_name,
             latest_version=latest_version_detail,
+            serial_ranges=serial_range_responses,
         )
 
 

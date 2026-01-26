@@ -29,6 +29,15 @@ export interface DocumentVersionDetail {
   blob_path: string | null;
 }
 
+export type SerialRangeType = "single" | "range" | "and_subs";
+
+export interface SerialRangeResponse {
+  id: number;
+  range_type: SerialRangeType;
+  serial_start: number;
+  serial_end: number | null;
+}
+
 export interface DocumentDetailResponse {
   guid: string;
   name: string;
@@ -37,6 +46,7 @@ export interface DocumentDetailResponse {
   category_id: number | null;
   category_name: string | null;
   latest_version: DocumentVersionDetail | null;
+  serial_ranges: SerialRangeResponse[];
 }
 
 export interface DocumentDownloadUrlResponse {
