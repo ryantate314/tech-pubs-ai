@@ -22,6 +22,7 @@ export interface FetchFilteredDocumentsParams {
   platformId?: number;
   generationId?: number;
   documentTypeId?: number;
+  documentCategoryId?: number;
 }
 
 export async function fetchFilteredDocuments(
@@ -37,6 +38,9 @@ export async function fetchFilteredDocuments(
   }
   if (params.documentTypeId) {
     searchParams.set("document_type_id", String(params.documentTypeId));
+  }
+  if (params.documentCategoryId) {
+    searchParams.set("document_category_id", String(params.documentCategoryId));
   }
 
   const queryString = searchParams.toString();

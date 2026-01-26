@@ -150,7 +150,7 @@ The codebase already has most of the building blocks:
 | # | Phase | Description | Status | Parallel | Depends | PRP Plan |
 |---|-------|-------------|--------|----------|---------|----------|
 | 1 | Page Shell + Document List | Layout at `/` with top bar, content area, card/table views, basic document fetching | complete | - | - | `.claude/PRPs/plans/aerodocs-page-shell-document-list.plan.md` |
-| 2 | Sidebar Filters | Collapsible sidebar with category and document type dropdowns wired to document fetching | pending | - | 1 | - |
+| 2 | Sidebar Filters | Collapsible sidebar with category and document type dropdowns wired to document fetching | complete | - | 1 | `.claude/PRPs/plans/aerodocs-sidebar-filters.plan.md` |
 | 3 | Embedded Wizard | Collapsible wizard panel triggered from top bar, reusing existing wizard components | pending | with 4 | 2 | - |
 | 4 | Search + Sort | Search bar in top bar, sort dropdown in content header, backend search support if needed | pending | with 3 | 2 | - |
 | 5 | User System + My Aircraft | Authentication, user aircraft registration, My Docs/All Docs, pinning, stats | pending | - | 3, 4 | - |

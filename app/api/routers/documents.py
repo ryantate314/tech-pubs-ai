@@ -6,7 +6,7 @@ from sqlalchemy.orm import aliased
 from fastapi import APIRouter, HTTPException, Query
 
 from techpubs_core.database import get_session
-from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentVersion
+from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentType, DocumentVersion
 
 from schemas.documents import (
     DocumentDetailResponse,
@@ -25,6 +25,7 @@ def list_documents(
     platform_id: Optional[int] = Query(None, description="Filter by platform ID"),
     generation_id: Optional[int] = Query(None, description="Filter by generation ID"),
     document_type_id: Optional[int] = Query(None, description="Filter by document type ID"),
+    document_category_id: Optional[int] = Query(None, description="Filter by document category ID"),
 ) -> DocumentListResponse:
     """List all documents with their latest job status."""
     with get_session() as session:
@@ -89,6 +90,11 @@ def list_documents(
 
         if document_type_id is not None:
             query = query.filter(Document.document_type_id == document_type_id)
+
+        if document_category_id is not None:
+            query = query.join(DocumentType, Document.document_type_id == DocumentType.id).filter(
+                DocumentType.document_category_id == document_category_id
+            )
 
         query = query.order_by(Document.created_at.desc())
 

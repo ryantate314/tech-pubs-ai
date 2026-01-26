@@ -2,12 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DocumentListItem } from "@/types/documents";
-import { fetchDocuments } from "@/lib/api/documents";
+import type { DocumentCategory, DocumentType } from "@/types/wizard";
+import {
+  fetchDocumentCategories,
+  fetchDocumentTypes,
+  fetchFilteredDocuments,
+} from "@/lib/api/wizard";
 import { TopBar } from "@/components/browser/TopBar";
 import { ContentHeader } from "@/components/browser/ContentHeader";
 import { DocumentCardGrid } from "@/components/browser/DocumentCardGrid";
 import { BrowseDocumentTable } from "@/components/browser/BrowseDocumentTable";
 import { Pagination } from "@/components/browser/Pagination";
+import { Sidebar } from "@/components/browser/Sidebar";
 
 const CARDS_PER_PAGE = 12;
 const ROWS_PER_PAGE = 20;
@@ -20,30 +26,103 @@ export default function Home() {
   const [sortBy, setSortBy] = useState("date-desc");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Sidebar state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [categories, setCategories] = useState<DocumentCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [documentTypesLoading, setDocumentTypesLoading] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<number | null>(null);
+
   // Read localStorage after mount to avoid hydration mismatch
   useEffect(() => {
-    const stored = localStorage.getItem("aerodocs-view-mode");
-    if (stored === "card" || stored === "table") {
-      setViewMode(stored);
+    const storedView = localStorage.getItem("aerodocs-view-mode");
+    if (storedView === "card" || storedView === "table") {
+      setViewMode(storedView);
+    }
+    const storedSidebar = localStorage.getItem("aerodocs-sidebar-collapsed");
+    if (storedSidebar === "true") {
+      setSidebarCollapsed(true);
     }
   }, []);
 
+  // Load categories on mount
+  const loadCategories = useCallback(async () => {
+    try {
+      setCategoriesLoading(true);
+      const data = await fetchDocumentCategories();
+      setCategories(data);
+    } catch {
+      // Categories failing to load is non-critical — dropdowns will be empty
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  // Load document types when category changes
+  useEffect(() => {
+    if (selectedCategoryId === null) {
+      setDocumentTypes([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadTypes() {
+      try {
+        setDocumentTypesLoading(true);
+        const data = await fetchDocumentTypes(selectedCategoryId!);
+        if (!cancelled) {
+          setDocumentTypes(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setDocumentTypes([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setDocumentTypesLoading(false);
+        }
+      }
+    }
+
+    loadTypes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategoryId]);
+
+  // Load documents (with filters)
   const loadDocuments = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
-      const data = await fetchDocuments();
+      const data = await fetchFilteredDocuments({
+        documentCategoryId: selectedCategoryId ?? undefined,
+        documentTypeId: selectedDocumentTypeId ?? undefined,
+      });
       setDocuments(data.documents);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load documents");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCategoryId, selectedDocumentTypeId]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategoryId, selectedDocumentTypeId]);
 
   const handleViewModeChange = useCallback((mode: "card" | "table") => {
     setViewMode(mode);
@@ -55,6 +134,30 @@ export default function Home() {
     setSortBy(sort);
     setCurrentPage(1);
   }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("aerodocs-sidebar-collapsed", String(next));
+      return next;
+    });
+  }, []);
+
+  const handleCategoryChange = useCallback((id: number | null) => {
+    setSelectedCategoryId(id);
+    setSelectedDocumentTypeId(null);
+  }, []);
+
+  const handleDocumentTypeChange = useCallback((id: number | null) => {
+    setSelectedDocumentTypeId(id);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setSelectedCategoryId(null);
+    setSelectedDocumentTypeId(null);
+  }, []);
+
+  const hasActiveFilters = selectedCategoryId !== null || selectedDocumentTypeId !== null;
 
   const sortedDocuments = useMemo(() => {
     const sorted = [...documents];
@@ -93,7 +196,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <TopBar />
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
             <div className="flex items-center justify-between">
@@ -108,34 +211,53 @@ export default function Home() {
           </div>
         )}
 
-        {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Loading documents...
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <ContentHeader
-              documentCount={documents.length}
-              viewMode={viewMode}
-              onViewModeChange={handleViewModeChange}
-              sortBy={sortBy}
-              onSortChange={handleSortChange}
-            />
-            {viewMode === "card" ? (
-              <DocumentCardGrid documents={paginatedDocuments} />
+        <div className="flex gap-6">
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={handleToggleSidebar}
+            categories={categories}
+            categoriesLoading={categoriesLoading}
+            selectedCategoryId={selectedCategoryId}
+            onCategoryChange={handleCategoryChange}
+            documentTypes={documentTypes}
+            documentTypesLoading={documentTypesLoading}
+            selectedDocumentTypeId={selectedDocumentTypeId}
+            onDocumentTypeChange={handleDocumentTypeChange}
+            onClearFilters={handleClearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+
+          <main className="min-w-0 flex-1">
+            {loading ? (
+              <div className="flex items-center justify-center p-8">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Loading documents...
+                </p>
+              </div>
             ) : (
-              <BrowseDocumentTable documents={paginatedDocuments} />
+              <div className="space-y-6">
+                <ContentHeader
+                  documentCount={documents.length}
+                  viewMode={viewMode}
+                  onViewModeChange={handleViewModeChange}
+                  sortBy={sortBy}
+                  onSortChange={handleSortChange}
+                />
+                {viewMode === "card" ? (
+                  <DocumentCardGrid documents={paginatedDocuments} />
+                ) : (
+                  <BrowseDocumentTable documents={paginatedDocuments} />
+                )}
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
             )}
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-        )}
-      </main>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
