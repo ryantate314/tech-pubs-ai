@@ -7,6 +7,9 @@ interface DocumentDetailPageProps {
   params: Promise<{
     guid: string;
   }>;
+  searchParams: Promise<{
+    page?: string;
+  }>;
 }
 
 async function getDocument(guid: string): Promise<DocumentDetailResponse | null> {
@@ -20,9 +23,12 @@ async function getDocument(guid: string): Promise<DocumentDetailResponse | null>
 
 export default async function DocumentDetailPage({
   params,
+  searchParams,
 }: DocumentDetailPageProps) {
   const { guid } = await params;
+  const { page } = await searchParams;
   const document = await getDocument(guid);
+  const initialPage = page ? parseInt(page, 10) : undefined;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -82,7 +88,7 @@ export default async function DocumentDetailPage({
           </p>
         </div>
       ) : (
-        <DocumentViewerContainer guid={guid} />
+        <DocumentViewerContainer guid={guid} initialPage={initialPage} />
       )}
     </div>
   );
