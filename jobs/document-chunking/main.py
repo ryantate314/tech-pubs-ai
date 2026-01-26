@@ -13,6 +13,8 @@ from azure.storage.blob import BlobServiceClient
 from azure.storage.queue import QueueClient
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
+from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+from transformers import AutoTokenizer
 
 from techpubs_core import (
     DOCUMENTS_CONTAINER,
@@ -183,22 +185,26 @@ def extract_text_chunks_docling(file_path: str) -> Iterator[dict]:
     converter = DocumentConverter()
     result = converter.convert(file_path)
 
+    tokenizer = HuggingFaceTokenizer(
+        tokenizer=AutoTokenizer.from_pretrained(EMBEDDING_MODEL_NAME),
+        # max_tokens=EMBEDDING_MODEL_MAX_TOKENS,
+    )
+
     # Use HybridChunker with tokenizer matching our embedding model
     # This ensures chunks are properly sized for embedding and respect document structure
     # Use 300 max_tokens to leave room for heading context added by contextualize()
     chunker = HybridChunker(
-        tokenizer=EMBEDDING_MODEL_NAME,
-        max_tokens=300,
+        tokenizer=tokenizer,
         merge_peers=True,
     )
-
-    # Get the tokenizer for truncating contextualized content
-    tokenizer = chunker.tokenizer
 
     for chunk_index, chunk in enumerate(chunker.chunk(dl_doc=result.document)):
         # Use contextualize() to get context-enriched text that includes
         # heading hierarchy for better semantic search
+        print(f"Processing chunk {chunk_index} of length {len(chunk.text)}")
         content = chunker.contextualize(chunk)
+        print(f"Size with context: {len(content)}")
+        print(content)
 
         # Truncate to model's max sequence length if needed
         # This can happen when contextualize() adds long heading hierarchies
@@ -264,20 +270,20 @@ def extract_text_chunks(file_path: str) -> Iterator[dict]:
     analysis = analyze_pdf(file_path)
     print(f"PDF analysis: {analysis['page_count']} pages, {analysis['file_size_mb']:.1f}MB, TOC: {analysis['has_toc']}")
 
-    if not analysis["is_large"]:
-        # Small PDF: use Docling directly
-        print("Strategy: Docling (small PDF)")
-        yield from extract_text_chunks_docling(file_path)
+    # if not analysis["is_large"]:
+    #     # Small PDF: use Docling directly
+    #     print("Strategy: Docling (small PDF)")
+    #     yield from extract_text_chunks_docling(file_path)
 
-    elif analysis["has_toc"]:
-        # Large PDF with TOC: split by chapter
-        print(f"Strategy: Chapter-based ({len(analysis['chapters'])} chapters)")
-        yield from extract_text_chunks_by_chapter(file_path, analysis)
+    # elif analysis["has_toc"]:
+    #     # Large PDF with TOC: split by chapter
+    #     print(f"Strategy: Chapter-based ({len(analysis['chapters'])} chapters)")
+    #     yield from extract_text_chunks_by_chapter(file_path, analysis)
 
-    else:
-        # Large PDF without TOC: simple chunking
-        print("Strategy: Simple page-based (large PDF, no TOC)")
-        yield from extract_text_chunks_simple(file_path)
+    # else:
+    # Large PDF without TOC: simple chunking
+    print("Strategy: Simple page-based (large PDF, no TOC)")
+    yield from extract_text_chunks_simple(file_path)
 
 
 def store_chunks_without_embeddings(
