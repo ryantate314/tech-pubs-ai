@@ -20,6 +20,7 @@ interface OutlineItem {
 interface PdfViewerProps {
   url: string;
   fileName: string;
+  initialPage?: number;
   onAuthError?: () => void;
   onRequestFreshUrl?: () => Promise<string | null>;
 }
@@ -27,11 +28,12 @@ interface PdfViewerProps {
 export default function PdfViewer({
   url,
   fileName,
+  initialPage,
   onAuthError,
   onRequestFreshUrl,
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage ?? 1);
   const [scale, setScale] = useState<number>(1.0);
   const [outline, setOutline] = useState<OutlineItem[] | null>(null);
   const [showOutline, setShowOutline] = useState<boolean>(false);
@@ -48,6 +50,13 @@ export default function PdfViewer({
     setIsLoading(false);
     setError(null);
 
+    // Validate and adjust current page if it exceeds document length
+    if (initialPage && initialPage > pdf.numPages) {
+      setCurrentPage(pdf.numPages);
+    } else if (initialPage && initialPage < 1) {
+      setCurrentPage(1);
+    }
+
     // Try to load outline/TOC
     try {
       const pdfOutline = await pdf.getOutline();
@@ -58,7 +67,7 @@ export default function PdfViewer({
     } catch {
       // No outline available
     }
-  }, []);
+  }, [initialPage]);
 
   const onDocumentLoadError = useCallback(
     (err: Error) => {
@@ -378,7 +387,7 @@ export default function PdfViewer({
         )}
 
         {/* PDF Document */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-auto">
           {error ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center p-8">
