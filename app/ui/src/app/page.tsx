@@ -2,18 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DocumentListItem } from "@/types/documents";
-import type { DocumentCategory, DocumentType } from "@/types/wizard";
+import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
+import type { AircraftModel } from "@/types/aircraft-models";
 import {
+  fetchPlatforms,
+  fetchGenerations,
   fetchDocumentCategories,
   fetchDocumentTypes,
   fetchFilteredDocuments,
 } from "@/lib/api/wizard";
+import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { TopBar } from "@/components/browser/TopBar";
 import { ContentHeader } from "@/components/browser/ContentHeader";
 import { DocumentCardGrid } from "@/components/browser/DocumentCardGrid";
 import { BrowseDocumentTable } from "@/components/browser/BrowseDocumentTable";
 import { Pagination } from "@/components/browser/Pagination";
 import { Sidebar } from "@/components/browser/Sidebar";
+
 
 const CARDS_PER_PAGE = 12;
 const ROWS_PER_PAGE = 20;
@@ -25,9 +30,20 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [sortBy, setSortBy] = useState("date-desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [platformsLoading, setPlatformsLoading] = useState(true);
+  const [generations, setGenerations] = useState<Generation[]>([]);
+  const [generationsLoading, setGenerationsLoading] = useState(false);
+  const [selectedPlatformId, setSelectedPlatformId] = useState<number | null>(null);
+  const [selectedGenerationId, setSelectedGenerationId] = useState<number | null>(null);
+  const [aircraftModels, setAircraftModels] = useState<AircraftModel[]>([]);
+  const [aircraftModelsLoading, setAircraftModelsLoading] = useState(true);
+  const [selectedAircraftModelId, setSelectedAircraftModelId] = useState<number | null>(null);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
@@ -46,6 +62,82 @@ export default function Home() {
       setSidebarCollapsed(true);
     }
   }, []);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Load platforms on mount
+  const loadPlatforms = useCallback(async () => {
+    try {
+      setPlatformsLoading(true);
+      const data = await fetchPlatforms();
+      setPlatforms(data);
+    } catch {
+      // non-critical
+    } finally {
+      setPlatformsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPlatforms();
+  }, [loadPlatforms]);
+
+  // Load aircraft models on mount
+  const loadAircraftModels = useCallback(async () => {
+    try {
+      setAircraftModelsLoading(true);
+      const data = await fetchAircraftModels();
+      setAircraftModels(data);
+    } catch {
+      // non-critical
+    } finally {
+      setAircraftModelsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAircraftModels();
+  }, [loadAircraftModels]);
+
+  // Load generations when platform changes
+  useEffect(() => {
+    if (selectedPlatformId === null) {
+      setGenerations([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadGenerations() {
+      try {
+        setGenerationsLoading(true);
+        const data = await fetchGenerations(selectedPlatformId!);
+        if (!cancelled) {
+          setGenerations(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setGenerations([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setGenerationsLoading(false);
+        }
+      }
+    }
+
+    loadGenerations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlatformId]);
 
   // Load categories on mount
   const loadCategories = useCallback(async () => {
@@ -98,14 +190,18 @@ export default function Home() {
     };
   }, [selectedCategoryId]);
 
-  // Load documents (with filters)
+  // Load documents (with filters and search)
   const loadDocuments = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
       const data = await fetchFilteredDocuments({
+        platformId: selectedPlatformId ?? undefined,
+        generationId: selectedGenerationId ?? undefined,
+        aircraftModelId: selectedAircraftModelId ?? undefined,
         documentCategoryId: selectedCategoryId ?? undefined,
         documentTypeId: selectedDocumentTypeId ?? undefined,
+        search: debouncedSearch || undefined,
       });
       setDocuments(data.documents);
     } catch (err) {
@@ -113,16 +209,29 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategoryId, selectedDocumentTypeId]);
+  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, debouncedSearch]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategoryId, selectedDocumentTypeId]);
+  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, debouncedSearch]);
+
+  const handlePlatformChange = useCallback((id: number | null) => {
+    setSelectedPlatformId(id);
+    setSelectedGenerationId(null);
+  }, []);
+
+  const handleGenerationChange = useCallback((id: number | null) => {
+    setSelectedGenerationId(id);
+  }, []);
+
+  const handleAircraftModelChange = useCallback((id: number | null) => {
+    setSelectedAircraftModelId(id);
+  }, []);
 
   const handleViewModeChange = useCallback((mode: "card" | "table") => {
     setViewMode(mode);
@@ -133,6 +242,10 @@ export default function Home() {
   const handleSortChange = useCallback((sort: string) => {
     setSortBy(sort);
     setCurrentPage(1);
+  }, []);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
   }, []);
 
   const handleToggleSidebar = useCallback(() => {
@@ -153,11 +266,15 @@ export default function Home() {
   }, []);
 
   const handleClearFilters = useCallback(() => {
+    setSelectedPlatformId(null);
+    setSelectedGenerationId(null);
+    setSelectedAircraftModelId(null);
     setSelectedCategoryId(null);
     setSelectedDocumentTypeId(null);
+    setSearchQuery("");
   }, []);
 
-  const hasActiveFilters = selectedCategoryId !== null || selectedDocumentTypeId !== null;
+  const hasActiveFilters = selectedPlatformId !== null || selectedGenerationId !== null || selectedAircraftModelId !== null || selectedCategoryId !== null || selectedDocumentTypeId !== null || debouncedSearch !== "";
 
   const sortedDocuments = useMemo(() => {
     const sorted = [...documents];
@@ -195,7 +312,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <TopBar />
+      <TopBar searchQuery={searchQuery} onSearchChange={handleSearchChange} />
       <div className="mx-auto max-w-7xl px-4 py-6">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
@@ -215,6 +332,18 @@ export default function Home() {
           <Sidebar
             collapsed={sidebarCollapsed}
             onToggleCollapse={handleToggleSidebar}
+            platforms={platforms}
+            platformsLoading={platformsLoading}
+            selectedPlatformId={selectedPlatformId}
+            onPlatformChange={handlePlatformChange}
+            aircraftModels={aircraftModels}
+            aircraftModelsLoading={aircraftModelsLoading}
+            selectedAircraftModelId={selectedAircraftModelId}
+            onAircraftModelChange={handleAircraftModelChange}
+            generations={generations}
+            generationsLoading={generationsLoading}
+            selectedGenerationId={selectedGenerationId}
+            onGenerationChange={handleGenerationChange}
             categories={categories}
             categoriesLoading={categoriesLoading}
             selectedCategoryId={selectedCategoryId}

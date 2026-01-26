@@ -23,6 +23,8 @@ export interface FetchFilteredDocumentsParams {
   generationId?: number;
   documentTypeId?: number;
   documentCategoryId?: number;
+  aircraftModelId?: number;
+  search?: string;
 }
 
 export async function fetchFilteredDocuments(
@@ -41,6 +43,12 @@ export async function fetchFilteredDocuments(
   }
   if (params.documentCategoryId) {
     searchParams.set("document_category_id", String(params.documentCategoryId));
+  }
+  if (params.aircraftModelId) {
+    searchParams.set("aircraft_model_id", String(params.aircraftModelId));
+  }
+  if (params.search) {
+    searchParams.set("search", params.search);
   }
 
   const queryString = searchParams.toString();

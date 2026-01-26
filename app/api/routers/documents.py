@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import aliased
 
 from fastapi import APIRouter, HTTPException, Query
@@ -26,6 +26,8 @@ def list_documents(
     generation_id: Optional[int] = Query(None, description="Filter by generation ID"),
     document_type_id: Optional[int] = Query(None, description="Filter by document type ID"),
     document_category_id: Optional[int] = Query(None, description="Filter by document category ID"),
+    search: Optional[str] = Query(None, description="Search by document name or aircraft model code"),
+    aircraft_model_id: Optional[int] = Query(None, description="Filter by aircraft model ID"),
 ) -> DocumentListResponse:
     """List all documents with their latest job status."""
     with get_session() as session:
@@ -94,6 +96,18 @@ def list_documents(
         if document_category_id is not None:
             query = query.join(DocumentType, Document.document_type_id == DocumentType.id).filter(
                 DocumentType.document_category_id == document_category_id
+            )
+
+        if aircraft_model_id is not None:
+            query = query.filter(Document.aircraft_model_id == aircraft_model_id)
+
+        if search is not None and search.strip():
+            search_term = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    Document.name.ilike(search_term),
+                    AircraftModel.code.ilike(search_term),
+                )
             )
 
         query = query.order_by(Document.created_at.desc())

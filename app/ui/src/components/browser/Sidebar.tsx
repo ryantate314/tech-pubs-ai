@@ -1,10 +1,23 @@
 "use client";
 
-import type { DocumentCategory, DocumentType } from "@/types/wizard";
+import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
+import type { AircraftModel } from "@/types/aircraft-models";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  platforms: Platform[];
+  platformsLoading: boolean;
+  selectedPlatformId: number | null;
+  onPlatformChange: (id: number | null) => void;
+  aircraftModels: AircraftModel[];
+  aircraftModelsLoading: boolean;
+  selectedAircraftModelId: number | null;
+  onAircraftModelChange: (id: number | null) => void;
+  generations: Generation[];
+  generationsLoading: boolean;
+  selectedGenerationId: number | null;
+  onGenerationChange: (id: number | null) => void;
   categories: DocumentCategory[];
   categoriesLoading: boolean;
   selectedCategoryId: number | null;
@@ -20,6 +33,18 @@ interface SidebarProps {
 export function Sidebar({
   collapsed,
   onToggleCollapse,
+  platforms,
+  platformsLoading,
+  selectedPlatformId,
+  onPlatformChange,
+  aircraftModels,
+  aircraftModelsLoading,
+  selectedAircraftModelId,
+  onAircraftModelChange,
+  generations,
+  generationsLoading,
+  selectedGenerationId,
+  onGenerationChange,
   categories,
   categoriesLoading,
   selectedCategoryId,
@@ -71,6 +96,97 @@ export function Sidebar({
 
         {!collapsed && (
           <div className="space-y-4 p-4">
+            {/* Platform dropdown */}
+            <div>
+              <label
+                htmlFor="sidebar-platform"
+                className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Platform
+              </label>
+              {platformsLoading ? (
+                <div className="h-9 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+              ) : (
+                <select
+                  id="sidebar-platform"
+                  value={selectedPlatformId ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onPlatformChange(val ? Number(val) : null);
+                  }}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  <option value="">All Platforms</option>
+                  {platforms.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Model dropdown */}
+            <div>
+              <label
+                htmlFor="sidebar-model"
+                className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Model
+              </label>
+              {aircraftModelsLoading ? (
+                <div className="h-9 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+              ) : (
+                <select
+                  id="sidebar-model"
+                  value={selectedAircraftModelId ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onAircraftModelChange(val ? Number(val) : null);
+                  }}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  <option value="">All Models</option>
+                  {aircraftModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Generation dropdown */}
+            <div>
+              <label
+                htmlFor="sidebar-generation"
+                className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Generation
+              </label>
+              {generationsLoading ? (
+                <div className="h-9 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+              ) : (
+                <select
+                  id="sidebar-generation"
+                  value={selectedGenerationId ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onGenerationChange(val ? Number(val) : null);
+                  }}
+                  disabled={selectedPlatformId === null}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  <option value="">All Generations</option>
+                  {generations.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             {/* Category dropdown */}
             <div>
               <label
