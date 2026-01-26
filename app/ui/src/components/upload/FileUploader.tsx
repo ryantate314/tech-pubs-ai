@@ -8,11 +8,8 @@ import type { UploadProgress, UploadStatus } from "@/types/uploads";
 import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { fetchCategories } from "@/lib/api/categories";
-<<<<<<< HEAD
 import { fetchPlatforms, fetchGenerations, fetchDocumentCategories, fetchDocumentTypes } from "@/lib/api/wizard";
-=======
 import { fetchDocument } from "@/lib/api/documents";
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 import {
   completeUpload,
   requestUploadUrl,
@@ -65,7 +62,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     jobId: number;
   } | null>(null);
 
-<<<<<<< HEAD
   // Wizard classification state
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [platformsLoading, setPlatformsLoading] = useState(true);
@@ -86,7 +82,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
   const [documentTypesLoading, setDocumentTypesLoading] = useState(false);
   const [documentTypesError, setDocumentTypesError] = useState<string | null>(null);
   const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<number | null>(null);
-=======
+
   // Fetch existing document when documentGuid is provided
   useEffect(() => {
     if (!documentGuid) return;
@@ -113,7 +109,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     }
     loadExistingDocument();
   }, [documentGuid]);
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 
   useEffect(() => {
     async function loadAircraftModels() {
@@ -272,16 +267,12 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
       !selectedFile ||
       !selectedAircraftModelId ||
       !selectedCategoryId ||
-<<<<<<< HEAD
       !selectedPlatformId ||
       !selectedGenerationId ||
       !selectedDocumentCategoryId ||
       !selectedDocumentTypeId ||
-      !documentName.trim()
-=======
       !documentName.trim() ||
       !versionName.trim()
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
     ) {
       return;
     }
@@ -299,14 +290,11 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         document_name: documentName.trim(),
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
-<<<<<<< HEAD
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
-=======
         version_name: versionName.trim(),
         document_guid: documentGuid,
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
       });
 
       setUploadStatus("uploading");
@@ -327,14 +315,11 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         file_size: selectedFile.size,
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
-<<<<<<< HEAD
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
-=======
         version_name: versionName.trim(),
         document_guid: documentGuid,
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
       });
 
       setUploadStatus("success");

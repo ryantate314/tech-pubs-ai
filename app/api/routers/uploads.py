@@ -117,7 +117,6 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
 
-<<<<<<< HEAD
         # Validate platform if provided
         if request.platform_id is not None:
             platform = session.query(Platform).filter(
@@ -133,7 +132,6 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
             ).first()
             if not generation:
                 raise HTTPException(status_code=404, detail="Generation not found")
-            # Verify generation belongs to selected platform
             if request.platform_id is not None and generation.platform_id != request.platform_id:
                 raise HTTPException(status_code=400, detail="Generation does not belong to selected platform")
 
@@ -145,18 +143,6 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
             if not document_type:
                 raise HTTPException(status_code=404, detail="Document type not found")
 
-        document = Document(
-            guid=uuid.uuid4(),
-            name=request.document_name,
-            aircraft_model_id=request.aircraft_model_id,
-            category_id=request.category_id,
-            platform_id=request.platform_id,
-            generation_id=request.generation_id,
-            document_type_id=request.document_type_id,
-        )
-        session.add(document)
-        session.flush()
-=======
         # If document_guid provided, add version to existing document
         if request.document_guid:
             document = session.query(Document).filter(
@@ -173,10 +159,12 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
                 name=request.document_name,
                 aircraft_model_id=request.aircraft_model_id,
                 category_id=request.category_id,
+                platform_id=request.platform_id,
+                generation_id=request.generation_id,
+                document_type_id=request.document_type_id,
             )
             session.add(document)
             session.flush()
->>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 
         document_version = DocumentVersion(
             guid=uuid.uuid4(),
