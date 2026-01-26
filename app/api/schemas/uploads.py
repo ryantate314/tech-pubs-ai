@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -8,6 +10,8 @@ class UploadUrlRequest(BaseModel):
     document_name: str
     aircraft_model_id: int
     category_id: int
+    version_name: str
+    document_guid: Optional[str] = None
 
 
 class UploadUrlResponse(BaseModel):
@@ -23,6 +27,8 @@ class UploadCompleteRequest(BaseModel):
     file_size: int
     aircraft_model_id: int
     category_id: int
+    version_name: str
+    document_guid: Optional[str] = None
 
 
 class UploadCompleteResponse(BaseModel):

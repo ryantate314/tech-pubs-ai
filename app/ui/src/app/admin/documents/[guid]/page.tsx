@@ -46,7 +46,7 @@ export default async function DocumentDetailPage({
           </span>
         </div>
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">
-          {document?.name || "Document Viewer"}
+          {document?.name || "Document Viewer"} {document?.latest_version?.name || ""}
         </h1>
         {document && (
           <div className="flex items-center gap-4 mt-2 text-sm text-zinc-600 dark:text-zinc-400">

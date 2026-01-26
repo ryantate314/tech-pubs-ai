@@ -5,6 +5,8 @@ export interface UploadUrlRequest {
   document_name: string;
   aircraft_model_id: number;
   category_id: number;
+  version_name: string;
+  document_guid?: string;
 }
 
 export interface UploadUrlResponse {
@@ -20,6 +22,8 @@ export interface UploadCompleteRequest {
   file_size: number;
   aircraft_model_id: number;
   category_id: number;
+  version_name: string;
+  document_guid?: string;
 }
 
 export interface UploadCompleteResponse {

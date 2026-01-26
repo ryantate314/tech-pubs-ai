@@ -24,6 +24,7 @@ class DocumentListResponse(BaseModel):
 
 class DocumentVersionDetail(BaseModel):
     guid: str
+    name: str
     file_name: str
     content_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -36,7 +37,9 @@ class DocumentVersionDetail(BaseModel):
 class DocumentDetailResponse(BaseModel):
     guid: str
     name: str
+    aircraft_model_id: Optional[int] = None
     aircraft_model_code: Optional[str] = None
+    category_id: Optional[int] = None
     category_name: Optional[str] = None
     latest_version: Optional[DocumentVersionDetail] = None
 
