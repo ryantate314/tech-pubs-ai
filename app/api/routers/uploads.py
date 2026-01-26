@@ -117,6 +117,7 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
 
+<<<<<<< HEAD
         # Validate platform if provided
         if request.platform_id is not None:
             platform = session.query(Platform).filter(
@@ -155,10 +156,31 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
         )
         session.add(document)
         session.flush()
+=======
+        # If document_guid provided, add version to existing document
+        if request.document_guid:
+            document = session.query(Document).filter(
+                Document.guid == request.document_guid,
+                Document.deleted_at.is_(None),
+            ).first()
+
+            if not document:
+                raise HTTPException(status_code=404, detail="Document not found")
+        else:
+            # Create new document
+            document = Document(
+                guid=uuid.uuid4(),
+                name=request.document_name,
+                aircraft_model_id=request.aircraft_model_id,
+                category_id=request.category_id,
+            )
+            session.add(document)
+            session.flush()
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 
         document_version = DocumentVersion(
             guid=uuid.uuid4(),
-            name=request.document_name,
+            name=request.version_name,
             file_name=request.filename,
             document_id=document.id,
             content_type=request.content_type,

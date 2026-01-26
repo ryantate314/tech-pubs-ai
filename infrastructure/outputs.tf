@@ -43,3 +43,13 @@ output "document_ingestion_client_id" {
   value = azurerm_user_assigned_identity.document_ingestion.client_id
   description = "The client ID of the Document Ingestion contaienr app job managed identity."
 }
+
+output "openai_endpoint" {
+  value       = azurerm_cognitive_account.openai.endpoint
+  description = "The endpoint URL for the Azure OpenAI service"
+}
+
+output "openai_deployment_name" {
+  value       = azurerm_cognitive_deployment.gpt4o.name
+  description = "The name of the GPT-4o deployment"
+}

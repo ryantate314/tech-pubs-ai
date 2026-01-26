@@ -176,6 +176,7 @@ def get_document(guid: str) -> DocumentDetailResponse:
         if latest_version:
             latest_version_detail = DocumentVersionDetail(
                 guid=str(latest_version.guid),
+                name=latest_version.name,
                 file_name=latest_version.file_name,
                 content_type=latest_version.content_type,
                 file_size=latest_version.file_size,
@@ -185,7 +186,9 @@ def get_document(guid: str) -> DocumentDetailResponse:
         return DocumentDetailResponse(
             guid=str(document.guid),
             name=document.name,
+            aircraft_model_id=document.aircraft_model_id,
             aircraft_model_code=aircraft_model_code,
+            category_id=document.category_id,
             category_name=category_name,
             latest_version=latest_version_detail,
         )

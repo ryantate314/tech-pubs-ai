@@ -14,7 +14,7 @@ export default function SinglePageView({
   scale,
 }: SinglePageViewProps) {
   return (
-    <div className="h-full overflow-auto flex justify-center bg-zinc-200 dark:bg-zinc-900 p-4">
+    <div className="flex justify-center bg-zinc-200 dark:bg-zinc-900 p-4">
       <div className="shadow-lg">
         <Page
           pageNumber={currentPage}

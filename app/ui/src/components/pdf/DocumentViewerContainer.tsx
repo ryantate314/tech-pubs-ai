@@ -20,10 +20,12 @@ const PdfViewer = dynamic(() => import("./PdfViewer"), {
 
 interface DocumentViewerContainerProps {
   guid: string;
+  initialPage?: number;
 }
 
 export default function DocumentViewerContainer({
   guid,
+  initialPage,
 }: DocumentViewerContainerProps) {
   const [downloadData, setDownloadData] = useState<DocumentDownloadUrlResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -124,7 +126,8 @@ export default function DocumentViewerContainer({
     <div className="h-[calc(100vh-200px)] rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
       <PdfViewer
         url={downloadData.download_url}
-        fileName={downloadData.file_name}
+        version_name={downloadData.version_name}
+        initialPage={initialPage}
         onAuthError={handleAuthError}
         onRequestFreshUrl={handleRequestFreshUrl}
       />

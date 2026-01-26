@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AircraftModel } from "@/types/aircraft-models";
 import type { Category } from "@/types/categories";
+import type { DocumentDetailResponse } from "@/types/documents";
 import type { UploadProgress, UploadStatus } from "@/types/uploads";
 import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { fetchCategories } from "@/lib/api/categories";
+<<<<<<< HEAD
 import { fetchPlatforms, fetchGenerations, fetchDocumentCategories, fetchDocumentTypes } from "@/lib/api/wizard";
+=======
+import { fetchDocument } from "@/lib/api/documents";
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 import {
   completeUpload,
   requestUploadUrl,
@@ -16,7 +21,11 @@ import {
 import { UploadDropzone } from "./UploadDropzone";
 import { UploadProgressDisplay } from "./UploadProgress";
 
-export function FileUploader() {
+interface FileUploaderProps {
+  documentGuid?: string;
+}
+
+export function FileUploader({ documentGuid }: FileUploaderProps) {
   const [aircraftModels, setAircraftModels] = useState<AircraftModel[]>([]);
   const [aircraftModelsLoading, setAircraftModelsLoading] = useState(true);
   const [aircraftModelsError, setAircraftModelsError] = useState<string | null>(
@@ -27,6 +36,15 @@ export function FileUploader() {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
+  const [existingDocument, setExistingDocument] =
+    useState<DocumentDetailResponse | null>(null);
+  const [existingDocumentLoading, setExistingDocumentLoading] = useState(
+    !!documentGuid
+  );
+  const [existingDocumentError, setExistingDocumentError] = useState<
+    string | null
+  >(null);
+
   const [selectedAircraftModelId, setSelectedAircraftModelId] = useState<
     number | null
   >(null);
@@ -34,6 +52,7 @@ export function FileUploader() {
     null
   );
   const [documentName, setDocumentName] = useState("");
+  const [versionName, setVersionName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
@@ -46,6 +65,7 @@ export function FileUploader() {
     jobId: number;
   } | null>(null);
 
+<<<<<<< HEAD
   // Wizard classification state
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [platformsLoading, setPlatformsLoading] = useState(true);
@@ -66,13 +86,42 @@ export function FileUploader() {
   const [documentTypesLoading, setDocumentTypesLoading] = useState(false);
   const [documentTypesError, setDocumentTypesError] = useState<string | null>(null);
   const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<number | null>(null);
+=======
+  // Fetch existing document when documentGuid is provided
+  useEffect(() => {
+    if (!documentGuid) return;
+
+    async function loadExistingDocument() {
+      try {
+        const data = await fetchDocument(documentGuid!);
+        setExistingDocument(data);
+        // Pre-fill fields from existing document
+        setDocumentName(data.name);
+        if (data.aircraft_model_id) {
+          setSelectedAircraftModelId(data.aircraft_model_id);
+        }
+        if (data.category_id) {
+          setSelectedCategoryId(data.category_id);
+        }
+      } catch (err) {
+        setExistingDocumentError(
+          err instanceof Error ? err.message : "Failed to load document"
+        );
+      } finally {
+        setExistingDocumentLoading(false);
+      }
+    }
+    loadExistingDocument();
+  }, [documentGuid]);
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 
   useEffect(() => {
     async function loadAircraftModels() {
       try {
         const data = await fetchAircraftModels();
         setAircraftModels(data);
-        if (data.length > 0) {
+        // Only set default if not adding version to existing document
+        if (!documentGuid && data.length > 0) {
           setSelectedAircraftModelId(data[0].id);
         }
       } catch (err) {
@@ -84,14 +133,15 @@ export function FileUploader() {
       }
     }
     loadAircraftModels();
-  }, []);
+  }, [documentGuid]);
 
   useEffect(() => {
     async function loadCategories() {
       try {
         const data = await fetchCategories();
         setCategories(data);
-        if (data.length > 0) {
+        // Only set default if not adding version to existing document
+        if (!documentGuid && data.length > 0) {
           setSelectedCategoryId(data[0].id);
         }
       } catch (err) {
@@ -103,7 +153,7 @@ export function FileUploader() {
       }
     }
     loadCategories();
-  }, []);
+  }, [documentGuid]);
 
   // Load platforms on mount
   useEffect(() => {
@@ -222,11 +272,16 @@ export function FileUploader() {
       !selectedFile ||
       !selectedAircraftModelId ||
       !selectedCategoryId ||
+<<<<<<< HEAD
       !selectedPlatformId ||
       !selectedGenerationId ||
       !selectedDocumentCategoryId ||
       !selectedDocumentTypeId ||
       !documentName.trim()
+=======
+      !documentName.trim() ||
+      !versionName.trim()
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
     ) {
       return;
     }
@@ -244,9 +299,14 @@ export function FileUploader() {
         document_name: documentName.trim(),
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
+<<<<<<< HEAD
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
+=======
+        version_name: versionName.trim(),
+        document_guid: documentGuid,
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
       });
 
       setUploadStatus("uploading");
@@ -267,9 +327,14 @@ export function FileUploader() {
         file_size: selectedFile.size,
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
+<<<<<<< HEAD
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
+=======
+        version_name: versionName.trim(),
+        document_guid: documentGuid,
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
       });
 
       setUploadStatus("success");
@@ -287,7 +352,10 @@ export function FileUploader() {
 
   const handleReset = () => {
     setSelectedFile(null);
-    setDocumentName("");
+    setVersionName("");
+    if (!documentGuid) {
+      setDocumentName("");
+    }
     setUploadStatus("idle");
     setUploadProgress(null);
     setUploadError(null);
@@ -317,8 +385,31 @@ export function FileUploader() {
     selectedDocumentCategoryId &&
     selectedDocumentTypeId &&
     documentName.trim() &&
+    versionName.trim() &&
     !isUploading &&
     uploadStatus !== "success";
+
+  const isAddingVersion = !!documentGuid;
+
+  // Show loading state while fetching existing document
+  if (existingDocumentLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-zinc-500">
+        Loading document details...
+      </div>
+    );
+  }
+
+  // Show error if existing document not found
+  if (existingDocumentError) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+        <p className="text-sm text-red-800 dark:text-red-200">
+          {existingDocumentError}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -337,6 +428,10 @@ export function FileUploader() {
           ) : aircraftModelsError ? (
             <div className="flex h-10 items-center text-sm text-red-500">
               {aircraftModelsError}
+            </div>
+          ) : isAddingVersion ? (
+            <div className="flex h-10 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+              {existingDocument?.aircraft_model_code ?? "—"}
             </div>
           ) : (
             <select
@@ -371,6 +466,10 @@ export function FileUploader() {
           ) : categoriesError ? (
             <div className="flex h-10 items-center text-sm text-red-500">
               {categoriesError}
+            </div>
+          ) : isAddingVersion ? (
+            <div className="flex h-10 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+              {existingDocument?.category_name ?? "—"}
             </div>
           ) : (
             <select
@@ -547,13 +646,37 @@ export function FileUploader() {
         >
           Document Name
         </label>
+        {isAddingVersion ? (
+          <div className="flex h-10 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+            {existingDocument?.name ?? "—"}
+          </div>
+        ) : (
+          <input
+            type="text"
+            id="documentName"
+            value={documentName}
+            onChange={(e) => setDocumentName(e.target.value)}
+            disabled={isUploading}
+            placeholder="Enter a display name for this document"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+          />
+        )}
+      </div>
+
+      <div>
+        <label
+          htmlFor="versionName"
+          className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          Version Name
+        </label>
         <input
           type="text"
-          id="documentName"
-          value={documentName}
-          onChange={(e) => setDocumentName(e.target.value)}
+          id="versionName"
+          value={versionName}
+          onChange={(e) => setVersionName(e.target.value)}
           disabled={isUploading}
-          placeholder="Enter a display name for this document"
+          placeholder="e.g., rev1, v9b, 2024-01"
           className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
         />
       </div>
@@ -578,8 +701,10 @@ export function FileUploader() {
       {uploadResult && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
           <p className="text-sm text-green-800 dark:text-green-200">
-            Document uploaded successfully! Document ID:{" "}
-            {uploadResult.documentId}, Job ID: {uploadResult.jobId}
+            {isAddingVersion
+              ? "New version uploaded successfully!"
+              : "Document uploaded successfully!"}{" "}
+            Document ID: {uploadResult.documentId}, Job ID: {uploadResult.jobId}
           </p>
         </div>
       )}
@@ -590,7 +715,7 @@ export function FileUploader() {
             onClick={handleUpload}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Upload Document
+            {isAddingVersion ? "Upload Version" : "Upload Document"}
           </button>
         )}
 

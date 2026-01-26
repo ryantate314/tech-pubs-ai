@@ -5,9 +5,14 @@ export interface UploadUrlRequest {
   document_name: string;
   aircraft_model_id: number;
   category_id: number;
+<<<<<<< HEAD
   platform_id?: number;
   generation_id?: number;
   document_type_id?: number;
+=======
+  version_name: string;
+  document_guid?: string;
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 }
 
 export interface UploadUrlResponse {
@@ -23,9 +28,14 @@ export interface UploadCompleteRequest {
   file_size: number;
   aircraft_model_id: number;
   category_id: number;
+<<<<<<< HEAD
   platform_id?: number;
   generation_id?: number;
   document_type_id?: number;
+=======
+  version_name: string;
+  document_guid?: string;
+>>>>>>> 834d0a238fe3be78e3126c08e8f0631420ae1044
 }
 
 export interface UploadCompleteResponse {
