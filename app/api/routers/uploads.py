@@ -3,7 +3,16 @@ import uuid
 from fastapi import APIRouter, HTTPException
 
 from techpubs_core.database import get_session
-from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentVersion
+from techpubs_core.models import (
+    AircraftModel,
+    Category,
+    Document,
+    DocumentJob,
+    DocumentType,
+    DocumentVersion,
+    Generation,
+    Platform,
+)
 
 from schemas.uploads import (
     UploadCompleteRequest,
@@ -52,6 +61,33 @@ def request_upload_url(request: UploadUrlRequest) -> UploadUrlResponse:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
 
+        # Validate platform if provided
+        if request.platform_id is not None:
+            platform = session.query(Platform).filter(
+                Platform.id == request.platform_id,
+            ).first()
+            if not platform:
+                raise HTTPException(status_code=404, detail="Platform not found")
+
+        # Validate generation if provided
+        if request.generation_id is not None:
+            generation = session.query(Generation).filter(
+                Generation.id == request.generation_id,
+            ).first()
+            if not generation:
+                raise HTTPException(status_code=404, detail="Generation not found")
+            # Verify generation belongs to selected platform
+            if request.platform_id is not None and generation.platform_id != request.platform_id:
+                raise HTTPException(status_code=400, detail="Generation does not belong to selected platform")
+
+        # Validate document_type if provided
+        if request.document_type_id is not None:
+            document_type = session.query(DocumentType).filter(
+                DocumentType.id == request.document_type_id,
+            ).first()
+            if not document_type:
+                raise HTTPException(status_code=404, detail="Document type not found")
+
         upload_url, blob_path = azure_storage_service.generate_upload_url(
             model=aircraft_model.code,
             category_name=category.name,
@@ -81,11 +117,41 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
 
+        # Validate platform if provided
+        if request.platform_id is not None:
+            platform = session.query(Platform).filter(
+                Platform.id == request.platform_id,
+            ).first()
+            if not platform:
+                raise HTTPException(status_code=404, detail="Platform not found")
+
+        # Validate generation if provided
+        if request.generation_id is not None:
+            generation = session.query(Generation).filter(
+                Generation.id == request.generation_id,
+            ).first()
+            if not generation:
+                raise HTTPException(status_code=404, detail="Generation not found")
+            # Verify generation belongs to selected platform
+            if request.platform_id is not None and generation.platform_id != request.platform_id:
+                raise HTTPException(status_code=400, detail="Generation does not belong to selected platform")
+
+        # Validate document_type if provided
+        if request.document_type_id is not None:
+            document_type = session.query(DocumentType).filter(
+                DocumentType.id == request.document_type_id,
+            ).first()
+            if not document_type:
+                raise HTTPException(status_code=404, detail="Document type not found")
+
         document = Document(
             guid=uuid.uuid4(),
             name=request.document_name,
             aircraft_model_id=request.aircraft_model_id,
             category_id=request.category_id,
+            platform_id=request.platform_id,
+            generation_id=request.generation_id,
+            document_type_id=request.document_type_id,
         )
         session.add(document)
         session.flush()

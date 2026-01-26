@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { AircraftModel } from "@/types/aircraft-models";
 import type { Category } from "@/types/categories";
 import type { UploadProgress, UploadStatus } from "@/types/uploads";
+import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { fetchCategories } from "@/lib/api/categories";
+import { fetchPlatforms, fetchGenerations, fetchDocumentCategories, fetchDocumentTypes } from "@/lib/api/wizard";
 import {
   completeUpload,
   requestUploadUrl,
@@ -43,6 +45,27 @@ export function FileUploader() {
     documentId: number;
     jobId: number;
   } | null>(null);
+
+  // Wizard classification state
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [platformsLoading, setPlatformsLoading] = useState(true);
+  const [platformsError, setPlatformsError] = useState<string | null>(null);
+  const [selectedPlatformId, setSelectedPlatformId] = useState<number | null>(null);
+
+  const [generations, setGenerations] = useState<Generation[]>([]);
+  const [generationsLoading, setGenerationsLoading] = useState(false);
+  const [generationsError, setGenerationsError] = useState<string | null>(null);
+  const [selectedGenerationId, setSelectedGenerationId] = useState<number | null>(null);
+
+  const [documentCategories, setDocumentCategories] = useState<DocumentCategory[]>([]);
+  const [documentCategoriesLoading, setDocumentCategoriesLoading] = useState(true);
+  const [documentCategoriesError, setDocumentCategoriesError] = useState<string | null>(null);
+  const [selectedDocumentCategoryId, setSelectedDocumentCategoryId] = useState<number | null>(null);
+
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [documentTypesLoading, setDocumentTypesLoading] = useState(false);
+  const [documentTypesError, setDocumentTypesError] = useState<string | null>(null);
+  const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadAircraftModels() {
@@ -82,6 +105,110 @@ export function FileUploader() {
     loadCategories();
   }, []);
 
+  // Load platforms on mount
+  useEffect(() => {
+    async function loadPlatforms() {
+      try {
+        const data = await fetchPlatforms();
+        setPlatforms(data);
+        if (data.length > 0) {
+          setSelectedPlatformId(data[0].id);
+        }
+      } catch (err) {
+        setPlatformsError(
+          err instanceof Error ? err.message : "Failed to load platforms"
+        );
+      } finally {
+        setPlatformsLoading(false);
+      }
+    }
+    loadPlatforms();
+  }, []);
+
+  // Load generations when platform changes
+  useEffect(() => {
+    if (!selectedPlatformId) {
+      setGenerations([]);
+      setSelectedGenerationId(null);
+      return;
+    }
+
+    const platformId = selectedPlatformId;
+    async function loadGenerations() {
+      setGenerationsLoading(true);
+      setGenerationsError(null);
+      try {
+        const data = await fetchGenerations(platformId);
+        setGenerations(data);
+        if (data.length > 0) {
+          setSelectedGenerationId(data[0].id);
+        } else {
+          setSelectedGenerationId(null);
+        }
+      } catch (err) {
+        setGenerationsError(
+          err instanceof Error ? err.message : "Failed to load generations"
+        );
+        setSelectedGenerationId(null);
+      } finally {
+        setGenerationsLoading(false);
+      }
+    }
+    loadGenerations();
+  }, [selectedPlatformId]);
+
+  // Load document categories on mount
+  useEffect(() => {
+    async function loadDocumentCategories() {
+      try {
+        const data = await fetchDocumentCategories();
+        setDocumentCategories(data);
+        if (data.length > 0) {
+          setSelectedDocumentCategoryId(data[0].id);
+        }
+      } catch (err) {
+        setDocumentCategoriesError(
+          err instanceof Error ? err.message : "Failed to load document categories"
+        );
+      } finally {
+        setDocumentCategoriesLoading(false);
+      }
+    }
+    loadDocumentCategories();
+  }, []);
+
+  // Load document types when category changes
+  useEffect(() => {
+    if (!selectedDocumentCategoryId) {
+      setDocumentTypes([]);
+      setSelectedDocumentTypeId(null);
+      return;
+    }
+
+    const categoryId = selectedDocumentCategoryId;
+    async function loadDocumentTypes() {
+      setDocumentTypesLoading(true);
+      setDocumentTypesError(null);
+      try {
+        const data = await fetchDocumentTypes(categoryId);
+        setDocumentTypes(data);
+        if (data.length > 0) {
+          setSelectedDocumentTypeId(data[0].id);
+        } else {
+          setSelectedDocumentTypeId(null);
+        }
+      } catch (err) {
+        setDocumentTypesError(
+          err instanceof Error ? err.message : "Failed to load document types"
+        );
+        setSelectedDocumentTypeId(null);
+      } finally {
+        setDocumentTypesLoading(false);
+      }
+    }
+    loadDocumentTypes();
+  }, [selectedDocumentCategoryId]);
+
   const handleFileSelect = useCallback((file: File) => {
     setSelectedFile(file);
     setUploadStatus("idle");
@@ -95,6 +222,10 @@ export function FileUploader() {
       !selectedFile ||
       !selectedAircraftModelId ||
       !selectedCategoryId ||
+      !selectedPlatformId ||
+      !selectedGenerationId ||
+      !selectedDocumentCategoryId ||
+      !selectedDocumentTypeId ||
       !documentName.trim()
     ) {
       return;
@@ -113,6 +244,9 @@ export function FileUploader() {
         document_name: documentName.trim(),
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
+        platform_id: selectedPlatformId,
+        generation_id: selectedGenerationId,
+        document_type_id: selectedDocumentTypeId,
       });
 
       setUploadStatus("uploading");
@@ -133,6 +267,9 @@ export function FileUploader() {
         file_size: selectedFile.size,
         aircraft_model_id: selectedAircraftModelId,
         category_id: selectedCategoryId,
+        platform_id: selectedPlatformId,
+        generation_id: selectedGenerationId,
+        document_type_id: selectedDocumentTypeId,
       });
 
       setUploadStatus("success");
@@ -155,6 +292,15 @@ export function FileUploader() {
     setUploadProgress(null);
     setUploadError(null);
     setUploadResult(null);
+    // Reset wizard selections to first item in each list
+    if (platforms.length > 0) {
+      setSelectedPlatformId(platforms[0].id);
+    }
+    if (documentCategories.length > 0) {
+      setSelectedDocumentCategoryId(documentCategories[0].id);
+    }
+    // Note: generations and documentTypes will auto-reset via useEffect
+    // when platform/category change triggers re-fetch
   };
 
   const isUploading =
@@ -166,6 +312,10 @@ export function FileUploader() {
     selectedFile &&
     selectedAircraftModelId &&
     selectedCategoryId &&
+    selectedPlatformId &&
+    selectedGenerationId &&
+    selectedDocumentCategoryId &&
+    selectedDocumentTypeId &&
     documentName.trim() &&
     !isUploading &&
     uploadStatus !== "success";
@@ -233,6 +383,156 @@ export function FileUploader() {
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {/* Wizard Classification: Platform & Generation */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="platform"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Platform
+          </label>
+          {platformsLoading ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Loading platforms...
+            </div>
+          ) : platformsError ? (
+            <div className="flex h-10 items-center text-sm text-red-500">
+              {platformsError}
+            </div>
+          ) : (
+            <select
+              id="platform"
+              value={selectedPlatformId ?? ""}
+              onChange={(e) => setSelectedPlatformId(Number(e.target.value))}
+              disabled={isUploading || platforms.length === 0}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            >
+              {platforms.map((platform) => (
+                <option key={platform.id} value={platform.id}>
+                  {platform.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="generation"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Generation
+          </label>
+          {generationsLoading ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Loading generations...
+            </div>
+          ) : generationsError ? (
+            <div className="flex h-10 items-center text-sm text-red-500">
+              {generationsError}
+            </div>
+          ) : !selectedPlatformId ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Select a platform first
+            </div>
+          ) : generations.length === 0 ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              No generations available
+            </div>
+          ) : (
+            <select
+              id="generation"
+              value={selectedGenerationId ?? ""}
+              onChange={(e) => setSelectedGenerationId(Number(e.target.value))}
+              disabled={isUploading || generations.length === 0}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            >
+              {generations.map((gen) => (
+                <option key={gen.id} value={gen.id}>
+                  {gen.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {/* Wizard Classification: Document Category & Type */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="documentCategory"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Document Category
+          </label>
+          {documentCategoriesLoading ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Loading document categories...
+            </div>
+          ) : documentCategoriesError ? (
+            <div className="flex h-10 items-center text-sm text-red-500">
+              {documentCategoriesError}
+            </div>
+          ) : (
+            <select
+              id="documentCategory"
+              value={selectedDocumentCategoryId ?? ""}
+              onChange={(e) => setSelectedDocumentCategoryId(Number(e.target.value))}
+              disabled={isUploading || documentCategories.length === 0}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            >
+              {documentCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="documentType"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Document Type
+          </label>
+          {documentTypesLoading ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Loading document types...
+            </div>
+          ) : documentTypesError ? (
+            <div className="flex h-10 items-center text-sm text-red-500">
+              {documentTypesError}
+            </div>
+          ) : !selectedDocumentCategoryId ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              Select a document category first
+            </div>
+          ) : documentTypes.length === 0 ? (
+            <div className="flex h-10 items-center text-sm text-zinc-500">
+              No document types available
+            </div>
+          ) : (
+            <select
+              id="documentType"
+              value={selectedDocumentTypeId ?? ""}
+              onChange={(e) => setSelectedDocumentTypeId(Number(e.target.value))}
+              disabled={isUploading || documentTypes.length === 0}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            >
+              {documentTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
                 </option>
               ))}
             </select>

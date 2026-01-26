@@ -5,6 +5,9 @@ export interface UploadUrlRequest {
   document_name: string;
   aircraft_model_id: number;
   category_id: number;
+  platform_id?: number;
+  generation_id?: number;
+  document_type_id?: number;
 }
 
 export interface UploadUrlResponse {
@@ -20,6 +23,9 @@ export interface UploadCompleteRequest {
   file_size: number;
   aircraft_model_id: number;
   category_id: number;
+  platform_id?: number;
+  generation_id?: number;
+  document_type_id?: number;
 }
 
 export interface UploadCompleteResponse {
