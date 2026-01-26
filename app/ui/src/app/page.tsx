@@ -1,64 +1,140 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DocumentListItem } from "@/types/documents";
+import { fetchDocuments } from "@/lib/api/documents";
+import { TopBar } from "@/components/browser/TopBar";
+import { ContentHeader } from "@/components/browser/ContentHeader";
+import { DocumentCardGrid } from "@/components/browser/DocumentCardGrid";
+import { BrowseDocumentTable } from "@/components/browser/BrowseDocumentTable";
+import { Pagination } from "@/components/browser/Pagination";
+
+const CARDS_PER_PAGE = 12;
+const ROWS_PER_PAGE = 20;
 
 export default function Home() {
+  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Read localStorage after mount to avoid hydration mismatch
+  useEffect(() => {
+    const stored = localStorage.getItem("aerodocs-view-mode");
+    if (stored === "card" || stored === "table") {
+      setViewMode(stored);
+    }
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      const data = await fetchDocuments();
+      setDocuments(data.documents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load documents");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  const handleViewModeChange = useCallback((mode: "card" | "table") => {
+    setViewMode(mode);
+    setCurrentPage(1);
+    localStorage.setItem("aerodocs-view-mode", mode);
+  }, []);
+
+  const handleSortChange = useCallback((sort: string) => {
+    setSortBy(sort);
+    setCurrentPage(1);
+  }, []);
+
+  const sortedDocuments = useMemo(() => {
+    const sorted = [...documents];
+    switch (sortBy) {
+      case "date-desc":
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case "date-asc":
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+    }
+    return sorted;
+  }, [documents, sortBy]);
+
+  const itemsPerPage = viewMode === "card" ? CARDS_PER_PAGE : ROWS_PER_PAGE;
+  const totalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
+
+  const paginatedDocuments = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedDocuments.slice(start, start + itemsPerPage);
+  }, [sortedDocuments, currentPage, itemsPerPage]);
+
+  // Reset to page 1 if current page exceeds total pages
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+              <button
+                onClick={loadDocuments}
+                className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Loading documents...
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <ContentHeader
+              documentCount={documents.length}
+              viewMode={viewMode}
+              onViewModeChange={handleViewModeChange}
+              sortBy={sortBy}
+              onSortChange={handleSortChange}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            {viewMode === "card" ? (
+              <DocumentCardGrid documents={paginatedDocuments} />
+            ) : (
+              <BrowseDocumentTable documents={paginatedDocuments} />
+            )}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
