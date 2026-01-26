@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     chunking_queue_name: str = "document-chunking"
     database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
+    azure_openai_endpoint: str = ""
+    azure_openai_deployment: str = "gpt-4o"
 
 
 settings = Settings()

@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy import text
 
 from fastapi import APIRouter
@@ -6,12 +8,13 @@ from techpubs_core.database import get_session
 from techpubs_core.embeddings import generate_embedding
 
 from schemas.search import ChunkResult, SearchRequest, SearchResponse
+from services.summarization_service import get_summarization_service
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
 @router.post("", response_model=SearchResponse)
-def search_documents(request: SearchRequest) -> SearchResponse:
+async def search_documents(request: SearchRequest) -> SearchResponse:
     """
     Search for document chunks using semantic similarity.
 
@@ -65,10 +68,18 @@ def search_documents(request: SearchRequest) -> SearchResponse:
         result = session.execute(text(sql), params)
         rows = result.fetchall()
 
+        print(f"Found {len(rows)} vector results")
+
+        # Summarize chunks using Azure OpenAI
+        summarization_service = get_summarization_service()
+        chunk_contents = [row.content for row in rows]
+        summaries = await summarization_service.summarize_chunks(chunk_contents, request.query)
+
         results = [
             ChunkResult(
                 id=row.id,
                 content=row.content,
+                summary=summaries[i],
                 page_number=row.page_number,
                 chapter_title=row.chapter_title,
                 document_guid=row.document_guid,
@@ -77,7 +88,7 @@ def search_documents(request: SearchRequest) -> SearchResponse:
                 category_name=row.category_name,
                 similarity=float(row.similarity),
             )
-            for row in rows
+            for i, row in enumerate(rows)
         ]
 
         return SearchResponse(

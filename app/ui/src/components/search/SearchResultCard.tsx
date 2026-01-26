@@ -53,7 +53,7 @@ export function SearchResultCard({ result }: SearchResultCardProps) {
       </div>
 
       <p className="mb-3 line-clamp-4 text-sm text-zinc-600 dark:text-zinc-300">
-        {result.content}
+        {result.summary}
       </p>
 
       <div className="flex items-center justify-between">

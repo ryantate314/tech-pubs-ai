@@ -14,6 +14,7 @@ class SearchRequest(BaseModel):
 class ChunkResult(BaseModel):
     id: int
     content: str
+    summary: str
     page_number: Optional[int] = None
     chapter_title: Optional[str] = None
     document_guid: str
