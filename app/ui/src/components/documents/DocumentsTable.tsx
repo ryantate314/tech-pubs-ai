@@ -171,6 +171,12 @@ export function DocumentsTable({ documents, onEdit, onDelete, onReprocess }: Doc
                     Upload New Version
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    href={`/admin/documents/${doc.guid}/chunks`}
+                    onClick={() => setOpenMenuId(null)}
+                  >
+                    View Chunks
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => {
                       setOpenMenuId(null);
                       setReprocessTarget(doc);
