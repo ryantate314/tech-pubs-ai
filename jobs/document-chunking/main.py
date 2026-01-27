@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import tempfile
+import traceback
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -540,6 +541,7 @@ def main():
 
             except Exception as e:
                 print(f"Error processing message {message.id}: {e}", file=sys.stderr)
+                traceback.print_exc()
                 # Message will become visible again after visibility_timeout expires
                 raise
 
@@ -550,6 +552,7 @@ def main():
 
     except Exception as e:
         print(f"Error in document chunking job: {e}", file=sys.stderr)
+        traceback.print_exc()
         sys.exit(1)
 
 

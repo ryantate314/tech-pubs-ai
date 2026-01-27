@@ -1,7 +1,7 @@
-output "container_registry_name" {
-  value       = azurerm_container_registry.main.name
-  description = "The name of the Azure Container Registry"
-}
+# output "container_registry_name" {
+#   value       = azurerm_container_registry.main.name
+#   description = "The name of the Azure Container Registry"
+# }
 
 output "postgres_password" {
   value       = random_password.postgres.result
@@ -52,4 +52,9 @@ output "openai_endpoint" {
 output "openai_deployment_name" {
   value       = azurerm_cognitive_deployment.gpt4o.name
   description = "The name of the GPT-4o deployment"
+}
+
+output "openai_embedding_deployment_name" {
+  value       = azurerm_cognitive_deployment.text_embedding_3_small.name
+  description = "The name of the text-embedding-3-small deployment"
 }

@@ -1,16 +1,10 @@
-export type DocumentJobStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled";
-
 export interface DocumentListItem {
   id: number;
   guid: string;
   name: string;
   aircraft_model_name: string | null;
-  latest_job_status: DocumentJobStatus | null;
+  total_chunks: number;
+  embedded_chunks: number;
   serial_ranges: SerialRangeResponse[];
   created_at: string;
 }
@@ -70,4 +64,10 @@ export interface DocumentDownloadUrlResponse {
   file_name: string;
   file_size: number | null;
   content_type: string | null;
+}
+
+export interface ReprocessResponse {
+  success: boolean;
+  message: string;
+  jobs_cancelled: number;
 }

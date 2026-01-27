@@ -25,7 +25,8 @@ class DocumentListItem(BaseModel):
     guid: str
     name: str
     aircraft_model_name: Optional[str] = None
-    latest_job_status: Optional[str] = None
+    total_chunks: int = 0
+    embedded_chunks: int = 0
     serial_ranges: list[SerialRangeResponse] = []
     created_at: datetime
 
@@ -78,3 +79,9 @@ class DocumentDownloadUrlResponse(BaseModel):
     file_name: str
     file_size: Optional[int] = None
     content_type: Optional[str] = None
+
+
+class ReprocessResponse(BaseModel):
+    success: bool
+    message: str
+    jobs_cancelled: int

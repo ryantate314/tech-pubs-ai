@@ -1,12 +1,11 @@
 from typing import Optional
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import aliased
 
 from fastapi import APIRouter, HTTPException, Query
 
 from techpubs_core.database import get_session
-from techpubs_core.models import AircraftModel, Document, DocumentCategory, DocumentJob, DocumentType, DocumentSerialRange, DocumentVersion
+from techpubs_core.models import AircraftModel, Document, DocumentCategory, DocumentChunk, DocumentType, DocumentSerialRange, DocumentVersion, DocumentJob
 
 from schemas.documents import (
     DocumentDetailResponse,
@@ -15,9 +14,11 @@ from schemas.documents import (
     DocumentListResponse,
     DocumentUpdateRequest,
     DocumentVersionDetail,
+    ReprocessResponse,
     SerialRangeResponse,
 )
 from services.azure_storage import azure_storage_service
+from services.queue_service import queue_service
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -31,7 +32,7 @@ def list_documents(
     search: Optional[str] = Query(None, description="Search by document name or aircraft model code"),
     aircraft_model_id: Optional[int] = Query(None, description="Filter by aircraft model ID"),
 ) -> DocumentListResponse:
-    """List all documents with their latest job status."""
+    """List all documents with their embed status (embedded_chunks/total_chunks)."""
     with get_session() as session:
         # Subquery to get the latest document_version_id for each document
         latest_version_subq = (
@@ -44,18 +45,16 @@ def list_documents(
             .subquery()
         )
 
-        # Subquery to get the latest job for each document version
-        latest_job_subq = (
+        # Subquery to get chunk counts for each document version
+        chunk_counts_subq = (
             session.query(
-                DocumentJob.document_version_id,
-                func.max(DocumentJob.id).label("latest_job_id"),
+                DocumentChunk.document_version_id,
+                func.count(DocumentChunk.id).label("total_chunks"),
+                func.count(DocumentChunk.embedding).label("embedded_chunks"),
             )
-            .group_by(DocumentJob.document_version_id)
+            .group_by(DocumentChunk.document_version_id)
             .subquery()
         )
-
-        # Alias for the DocumentJob to get status
-        LatestJob = aliased(DocumentJob)
 
         # Main query
         query = (
@@ -64,7 +63,8 @@ def list_documents(
                 Document.guid,
                 Document.name,
                 AircraftModel.name.label("aircraft_model_name"),
-                LatestJob.status.label("latest_job_status"),
+                func.coalesce(chunk_counts_subq.c.total_chunks, 0).label("total_chunks"),
+                func.coalesce(chunk_counts_subq.c.embedded_chunks, 0).label("embedded_chunks"),
                 Document.created_at,
             )
             .outerjoin(AircraftModel, Document.aircraft_model_id == AircraftModel.id)
@@ -73,12 +73,8 @@ def list_documents(
                 Document.id == latest_version_subq.c.document_id,
             )
             .outerjoin(
-                latest_job_subq,
-                latest_version_subq.c.latest_version_id == latest_job_subq.c.document_version_id,
-            )
-            .outerjoin(
-                LatestJob,
-                latest_job_subq.c.latest_job_id == LatestJob.id,
+                chunk_counts_subq,
+                latest_version_subq.c.latest_version_id == chunk_counts_subq.c.document_version_id,
             )
             .filter(Document.deleted_at.is_(None))
         )
@@ -141,7 +137,8 @@ def list_documents(
                 guid=str(row.guid),
                 name=row.name,
                 aircraft_model_name=row.aircraft_model_name,
-                latest_job_status=row.latest_job_status,
+                total_chunks=row.total_chunks,
+                embedded_chunks=row.embedded_chunks,
                 serial_ranges=serial_ranges_by_doc.get(row.id, []),
                 created_at=row.created_at,
             )
@@ -426,3 +423,65 @@ def delete_document(guid: str) -> None:
 
         document.deleted_at = func.now()
         session.commit()
+
+
+@router.post("/{guid}/reprocess", response_model=ReprocessResponse)
+def reprocess_document(guid: str) -> ReprocessResponse:
+    """Reprocess a document by cancelling pending jobs, deleting chunks, and queuing new chunking job."""
+    with get_session() as session:
+        # Find document and validate
+        document = (
+            session.query(Document)
+            .filter(Document.guid == guid, Document.deleted_at.is_(None))
+            .first()
+        )
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Get latest version
+        latest_version = (
+            session.query(DocumentVersion)
+            .filter(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.deleted_at.is_(None),
+            )
+            .order_by(DocumentVersion.id.desc())
+            .first()
+        )
+
+        if not latest_version:
+            raise HTTPException(status_code=404, detail="No document version found")
+
+        # Cancel any pending/running jobs for this version
+        jobs_cancelled = (
+            session.query(DocumentJob)
+            .filter(
+                DocumentJob.document_version_id == latest_version.id,
+                DocumentJob.status.in_(["pending", "processing"]),
+            )
+            .update({"status": "cancelled"}, synchronize_session=False)
+        )
+
+        # Delete existing chunks for this version
+        session.query(DocumentChunk).filter(
+            DocumentChunk.document_version_id == latest_version.id
+        ).delete(synchronize_session=False)
+
+        # Create new chunking job
+        new_job = DocumentJob(
+            document_version_id=latest_version.id,
+            job_type="chunking",
+            status="pending",
+        )
+        session.add(new_job)
+        session.commit()
+
+        # Queue the chunking job
+        queue_service.send_chunking_job_message(new_job.id)
+
+        return ReprocessResponse(
+            success=True,
+            message=f"Document queued for reprocessing",
+            jobs_cancelled=jobs_cancelled,
+        )

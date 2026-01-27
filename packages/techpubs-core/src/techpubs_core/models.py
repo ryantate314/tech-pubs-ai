@@ -168,7 +168,8 @@ class DocumentChunk(Base):
     document_version_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_versions.id"), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(Vector(768), nullable=True)  # BAAI/bge-base-en-v1.5 dimension
+    embedding = mapped_column(Vector(1536), nullable=True)  # text-embedding-3-small dimension
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     chapter_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

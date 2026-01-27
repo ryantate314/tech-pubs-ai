@@ -3,6 +3,7 @@ import type {
   DocumentDownloadUrlResponse,
   DocumentListResponse,
   DocumentUpdateRequest,
+  ReprocessResponse,
 } from "@/types/documents";
 import { apiRequest } from "./client";
 
@@ -43,4 +44,10 @@ export async function deleteDocument(guid: string): Promise<void> {
     }
     throw new Error(message);
   }
+}
+
+export async function reprocessDocument(guid: string): Promise<ReprocessResponse> {
+  return apiRequest<ReprocessResponse>(`/api/documents/${guid}/reprocess`, {
+    method: "POST",
+  });
 }

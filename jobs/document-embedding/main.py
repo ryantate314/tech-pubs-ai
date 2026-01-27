@@ -11,7 +11,7 @@ from techpubs_core import (
     DocumentJob,
     get_session,
 )
-from techpubs_core.embeddings import generate_embeddings_batch
+from techpubs_core.embeddings import generate_embeddings_batch, get_embedding_model
 
 
 def get_credential() -> DefaultAzureCredential:
@@ -93,17 +93,18 @@ def process_embedding_job(job_id: int) -> None:
 
             print(f"Generating embeddings for {len(chunks)} chunks...")
 
-            # Generate embeddings in batches of 32 for efficiency
-            batch_size = 32
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i : i + batch_size]
-                texts = [chunk.content for chunk in batch]
-                embeddings = generate_embeddings_batch(texts)
+            # Get the model identifier for tracking
+            embedding_model = get_embedding_model()
+            print(f"  Using model: {embedding_model}")
 
-                for chunk, embedding in zip(batch, embeddings):
-                    chunk.embedding = embedding
+            # Generate embeddings (library handles batching internally)
+            batch_delay = float(os.environ.get("EMBEDDING_BATCH_DELAY", "0.0"))
+            texts = [chunk.content for chunk in chunks]
+            embeddings = generate_embeddings_batch(texts, batch_delay=batch_delay)
 
-                print(f"  Processed {min(i + batch_size, len(chunks))}/{len(chunks)} chunks")
+            for chunk, embedding in zip(chunks, embeddings):
+                chunk.embedding = embedding
+                chunk.embedding_model = embedding_model
 
             # Mark job as completed
             job.status = "completed"

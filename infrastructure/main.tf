@@ -55,30 +55,30 @@ resource "azurerm_storage_queue" "document_embedding" {
 }
 
 # Container Registry for storing the document ingestion job image
-resource "azurerm_container_registry" "main" {
-  name                = "cr${local.workload}${random_string.unique.result}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  sku                 = "Basic"
-  admin_enabled       = true
-}
+# resource "azurerm_container_registry" "main" {
+#   name                = "cr${local.workload}${random_string.unique.result}"
+#   resource_group_name = azurerm_resource_group.main.name
+#   location            = azurerm_resource_group.main.location
+#   sku                 = "Basic"
+#   admin_enabled       = true
+# }
 
 # Log Analytics Workspace for Container Apps Environment
-resource "azurerm_log_analytics_workspace" "main" {
-  name                = "log-${local.workload}-${var.environment}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
-}
+# resource "azurerm_log_analytics_workspace" "main" {
+#   name                = "log-${local.workload}-${var.environment}"
+#   resource_group_name = azurerm_resource_group.main.name
+#   location            = azurerm_resource_group.main.location
+#   sku                 = "PerGB2018"
+#   retention_in_days   = 30
+# }
 
 # Container Apps Environment
-resource "azurerm_container_app_environment" "main" {
-  name                       = "cae-${local.workload}-${var.environment}"
-  resource_group_name        = azurerm_resource_group.main.name
-  location                   = azurerm_resource_group.main.location
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
-}
+# resource "azurerm_container_app_environment" "main" {
+#   name                       = "cae-${local.workload}-${var.environment}"
+#   resource_group_name        = azurerm_resource_group.main.name
+#   location                   = azurerm_resource_group.main.location
+#   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+# }
 
 # User Assigned Identity for the Container App Job
 resource "azurerm_user_assigned_identity" "document_ingestion" {
@@ -130,199 +130,199 @@ resource "azurerm_role_assignment" "api_queue_sender" {
 }
 
 # Grant the identity access to pull images from ACR
-resource "azurerm_role_assignment" "document_ingestion_acr_pull" {
-  scope                = azurerm_container_registry.main.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
-}
+# resource "azurerm_role_assignment" "document_ingestion_acr_pull" {
+#   scope                = azurerm_container_registry.main.id
+#   role_definition_name = "AcrPull"
+#   principal_id         = azurerm_user_assigned_identity.document_ingestion.principal_id
+# }
 
 # Container App Job for document chunking (event-driven)
-resource "azurerm_container_app_job" "document_chunking" {
-  name                         = "caj-document-chunking-${var.environment}"
-  resource_group_name          = azurerm_resource_group.main.name
-  location                     = azurerm_resource_group.main.location
-  container_app_environment_id = azurerm_container_app_environment.main.id
+# resource "azurerm_container_app_job" "document_chunking" {
+#   name                         = "caj-document-chunking-${var.environment}"
+#   resource_group_name          = azurerm_resource_group.main.name
+#   location                     = azurerm_resource_group.main.location
+#   container_app_environment_id = azurerm_container_app_environment.main.id
 
-  replica_timeout_in_seconds = 600
-  replica_retry_limit        = 1
+#   replica_timeout_in_seconds = 600
+#   replica_retry_limit        = 1
 
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
-  }
+#   identity {
+#     type         = "UserAssigned"
+#     identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
+#   }
 
-  registry {
-    server   = azurerm_container_registry.main.login_server
-    identity = azurerm_user_assigned_identity.document_ingestion.id
-  }
+#   registry {
+#     server   = azurerm_container_registry.main.login_server
+#     identity = azurerm_user_assigned_identity.document_ingestion.id
+#   }
 
-  event_trigger_config {
-    parallelism              = 1
-    replica_completion_count = 1
+#   event_trigger_config {
+#     parallelism              = 1
+#     replica_completion_count = 1
 
-    scale {
-      min_executions              = 0
-      max_executions              = 10
-      polling_interval_in_seconds = 30
+#     scale {
+#       min_executions              = 0
+#       max_executions              = 10
+#       polling_interval_in_seconds = 30
 
-      rules {
-        name             = "queue-trigger"
-        custom_rule_type = "azure-queue"
-        metadata = {
-          queueName   = azurerm_storage_queue.document_chunking.name
-          accountName = azurerm_storage_account.main.name
-        }
-        authentication {
-          secret_name       = "storage-connection-string"
-          trigger_parameter = "connection"
-        }
-      }
-    }
-  }
+#       rules {
+#         name             = "queue-trigger"
+#         custom_rule_type = "azure-queue"
+#         metadata = {
+#           queueName   = azurerm_storage_queue.document_chunking.name
+#           accountName = azurerm_storage_account.main.name
+#         }
+#         authentication {
+#           secret_name       = "storage-connection-string"
+#           trigger_parameter = "connection"
+#         }
+#       }
+#     }
+#   }
 
-  secret {
-    name  = "storage-connection-string"
-    value = azurerm_storage_account.main.primary_connection_string
-  }
+#   secret {
+#     name  = "storage-connection-string"
+#     value = azurerm_storage_account.main.primary_connection_string
+#   }
 
-  secret {
-    name  = "database-url"
-    value = var.database_url
-  }
+#   secret {
+#     name  = "database-url"
+#     value = var.database_url
+#   }
 
-  template {
-    container {
-      name   = "document-chunking"
-      image  = "${azurerm_container_registry.main.login_server}/document-chunking:latest"
-      cpu    = 0.5
-      memory = "1Gi"
+#   template {
+#     container {
+#       name   = "document-chunking"
+#       image  = "${azurerm_container_registry.main.login_server}/document-chunking:latest"
+#       cpu    = 0.5
+#       memory = "1Gi"
 
-      env {
-        name  = "STORAGE_ACCOUNT_URL"
-        value = azurerm_storage_account.main.primary_blob_endpoint
-      }
+#       env {
+#         name  = "STORAGE_ACCOUNT_URL"
+#         value = azurerm_storage_account.main.primary_blob_endpoint
+#       }
 
-      env {
-        name  = "STORAGE_QUEUE_URL"
-        value = azurerm_storage_account.main.primary_queue_endpoint
-      }
+#       env {
+#         name  = "STORAGE_QUEUE_URL"
+#         value = azurerm_storage_account.main.primary_queue_endpoint
+#       }
 
-      env {
-        name  = "QUEUE_NAME"
-        value = azurerm_storage_queue.document_chunking.name
-      }
+#       env {
+#         name  = "QUEUE_NAME"
+#         value = azurerm_storage_queue.document_chunking.name
+#       }
 
-      env {
-        name  = "EMBEDDING_QUEUE_NAME"
-        value = azurerm_storage_queue.document_embedding.name
-      }
+#       env {
+#         name  = "EMBEDDING_QUEUE_NAME"
+#         value = azurerm_storage_queue.document_embedding.name
+#       }
 
-      env {
-        name        = "DATABASE_URL"
-        secret_name = "database-url"
-      }
+#       env {
+#         name        = "DATABASE_URL"
+#         secret_name = "database-url"
+#       }
 
-      env {
-        name  = "AZURE_CLIENT_ID"
-        value = azurerm_user_assigned_identity.document_ingestion.client_id
-      }
-    }
-  }
+#       env {
+#         name  = "AZURE_CLIENT_ID"
+#         value = azurerm_user_assigned_identity.document_ingestion.client_id
+#       }
+#     }
+#   }
 
-  depends_on = [
-    azurerm_role_assignment.document_ingestion_acr_pull,
-    azurerm_role_assignment.document_ingestion_blob_reader,
-    azurerm_role_assignment.document_ingestion_queue_processor
-  ]
-}
+#   depends_on = [
+#     azurerm_role_assignment.document_ingestion_acr_pull,
+#     azurerm_role_assignment.document_ingestion_blob_reader,
+#     azurerm_role_assignment.document_ingestion_queue_processor
+#   ]
+# }
 
 # Container App Job for document embedding (event-driven)
-resource "azurerm_container_app_job" "document_embedding" {
-  name                         = "caj-document-embedding-${var.environment}"
-  resource_group_name          = azurerm_resource_group.main.name
-  location                     = azurerm_resource_group.main.location
-  container_app_environment_id = azurerm_container_app_environment.main.id
+# resource "azurerm_container_app_job" "document_embedding" {
+#   name                         = "caj-document-embedding-${var.environment}"
+#   resource_group_name          = azurerm_resource_group.main.name
+#   location                     = azurerm_resource_group.main.location
+#   container_app_environment_id = azurerm_container_app_environment.main.id
 
-  replica_timeout_in_seconds = 300
-  replica_retry_limit        = 1
+#   replica_timeout_in_seconds = 300
+#   replica_retry_limit        = 1
 
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
-  }
+#   identity {
+#     type         = "UserAssigned"
+#     identity_ids = [azurerm_user_assigned_identity.document_ingestion.id]
+#   }
 
-  registry {
-    server   = azurerm_container_registry.main.login_server
-    identity = azurerm_user_assigned_identity.document_ingestion.id
-  }
+#   registry {
+#     server   = azurerm_container_registry.main.login_server
+#     identity = azurerm_user_assigned_identity.document_ingestion.id
+#   }
 
-  event_trigger_config {
-    parallelism              = 1
-    replica_completion_count = 1
+#   event_trigger_config {
+#     parallelism              = 1
+#     replica_completion_count = 1
 
-    scale {
-      min_executions              = 0
-      max_executions              = 50
-      polling_interval_in_seconds = 30
+#     scale {
+#       min_executions              = 0
+#       max_executions              = 50
+#       polling_interval_in_seconds = 30
 
-      rules {
-        name             = "queue-trigger"
-        custom_rule_type = "azure-queue"
-        metadata = {
-          queueName   = azurerm_storage_queue.document_embedding.name
-          accountName = azurerm_storage_account.main.name
-        }
-        authentication {
-          secret_name       = "storage-connection-string"
-          trigger_parameter = "connection"
-        }
-      }
-    }
-  }
+#       rules {
+#         name             = "queue-trigger"
+#         custom_rule_type = "azure-queue"
+#         metadata = {
+#           queueName   = azurerm_storage_queue.document_embedding.name
+#           accountName = azurerm_storage_account.main.name
+#         }
+#         authentication {
+#           secret_name       = "storage-connection-string"
+#           trigger_parameter = "connection"
+#         }
+#       }
+#     }
+#   }
 
-  secret {
-    name  = "storage-connection-string"
-    value = azurerm_storage_account.main.primary_connection_string
-  }
+#   secret {
+#     name  = "storage-connection-string"
+#     value = azurerm_storage_account.main.primary_connection_string
+#   }
 
-  secret {
-    name  = "database-url"
-    value = var.database_url
-  }
+#   secret {
+#     name  = "database-url"
+#     value = var.database_url
+#   }
 
-  template {
-    container {
-      name   = "document-embedding"
-      image  = "${azurerm_container_registry.main.login_server}/document-embedding:latest"
-      cpu    = 0.5
-      memory = "1Gi"
+#   template {
+#     container {
+#       name   = "document-embedding"
+#       image  = "${azurerm_container_registry.main.login_server}/document-embedding:latest"
+#       cpu    = 0.5
+#       memory = "1Gi"
 
-      env {
-        name  = "STORAGE_QUEUE_URL"
-        value = azurerm_storage_account.main.primary_queue_endpoint
-      }
+#       env {
+#         name  = "STORAGE_QUEUE_URL"
+#         value = azurerm_storage_account.main.primary_queue_endpoint
+#       }
 
-      env {
-        name  = "QUEUE_NAME"
-        value = azurerm_storage_queue.document_embedding.name
-      }
+#       env {
+#         name  = "QUEUE_NAME"
+#         value = azurerm_storage_queue.document_embedding.name
+#       }
 
-      env {
-        name        = "DATABASE_URL"
-        secret_name = "database-url"
-      }
+#       env {
+#         name        = "DATABASE_URL"
+#         secret_name = "database-url"
+#       }
 
-      env {
-        name  = "AZURE_CLIENT_ID"
-        value = azurerm_user_assigned_identity.document_ingestion.client_id
-      }
-    }
-  }
+#       env {
+#         name  = "AZURE_CLIENT_ID"
+#         value = azurerm_user_assigned_identity.document_ingestion.client_id
+#       }
+#     }
+#   }
 
-  depends_on = [
-    azurerm_role_assignment.document_ingestion_acr_pull,
-    azurerm_role_assignment.document_ingestion_blob_reader,
-    azurerm_role_assignment.document_ingestion_queue_processor
-  ]
-}
+#   depends_on = [
+#     azurerm_role_assignment.document_ingestion_acr_pull,
+#     azurerm_role_assignment.document_ingestion_blob_reader,
+#     azurerm_role_assignment.document_ingestion_queue_processor
+#   ]
+# }
 

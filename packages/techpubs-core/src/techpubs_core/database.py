@@ -6,10 +6,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def get_database_url() -> str:
-    """Get database URL from environment variable."""
+    """Get database URL from environment variable.
+
+    Converts postgresql:// to postgresql+psycopg:// to use psycopg v3 driver.
+    """
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise ValueError("DATABASE_URL environment variable not set")
+    # Use psycopg (v3) driver instead of psycopg2
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     return database_url
 
 

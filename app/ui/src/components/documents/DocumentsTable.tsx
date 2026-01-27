@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { formatSerialRanges } from "@/lib/formatters";
 import type { DocumentListItem } from "@/types/documents";
-import { DocumentStatusIndicator } from "./DocumentStatusIndicator";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu, DropdownMenuItem, calculateDropdownPosition } from "@/components/ui/DropdownMenu";
 
@@ -12,6 +11,7 @@ interface DocumentsTableProps {
   documents: DocumentListItem[];
   onEdit: (doc: DocumentListItem) => void;
   onDelete: (guid: string) => Promise<void>;
+  onReprocess: (guid: string) => Promise<void>;
 }
 
 function formatDate(dateString: string): string {
@@ -22,11 +22,13 @@ function formatDate(dateString: string): string {
   });
 }
 
-export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTableProps) {
+export function DocumentsTable({ documents, onEdit, onDelete, onReprocess }: DocumentsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; placement: "above" | "below" } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [reprocessTarget, setReprocessTarget] = useState<DocumentListItem | null>(null);
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -36,6 +38,17 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleReprocess() {
+    if (!reprocessTarget) return;
+    setIsReprocessing(true);
+    try {
+      await onReprocess(reprocessTarget.guid);
+      setReprocessTarget(null);
+    } finally {
+      setIsReprocessing(false);
     }
   }
 
@@ -67,7 +80,7 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
               Created
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Status
+              Embed Status
             </th>
             <th className="w-12 px-4 py-3">
               <span className="sr-only">Actions</span>
@@ -97,8 +110,16 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {formatDate(doc.created_at)}
               </td>
-              <td className="whitespace-nowrap px-4 py-3">
-                <DocumentStatusIndicator status={doc.latest_job_status} />
+              <td className="whitespace-nowrap px-4 py-3 text-sm">
+                <span className={
+                  doc.total_chunks === 0
+                    ? "text-zinc-400 dark:text-zinc-500"
+                    : doc.embedded_chunks === doc.total_chunks
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-amber-600 dark:text-amber-400"
+                }>
+                  {doc.embedded_chunks}/{doc.total_chunks}
+                </span>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-right">
                 <DropdownMenu
@@ -150,6 +171,14 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
                     Upload New Version
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setReprocessTarget(doc);
+                    }}
+                  >
+                    Reprocess
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     variant="danger"
                     onClick={() => {
                       setOpenMenuId(null);
@@ -172,6 +201,14 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
         variant="danger"
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={reprocessTarget !== null}
+        title="Reprocess Document"
+        message={`Are you sure you want to reprocess "${reprocessTarget?.name}"? This will delete existing chunks and embeddings, then re-run the full processing pipeline.`}
+        confirmLabel={isReprocessing ? "Reprocessing..." : "Reprocess"}
+        onConfirm={handleReprocess}
+        onCancel={() => setReprocessTarget(null)}
       />
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DocumentDetailResponse, DocumentListItem } from "@/types/documents";
-import { deleteDocument, fetchDocument, fetchDocuments } from "@/lib/api/documents";
+import { deleteDocument, fetchDocument, fetchDocuments, reprocessDocument } from "@/lib/api/documents";
 import { DocumentsTable } from "./DocumentsTable";
 import { EditDocumentModal } from "./EditDocumentModal";
 
@@ -63,6 +63,18 @@ export function DocumentsList() {
     }
   }, [documents]);
 
+  const handleReprocess = useCallback(async (guid: string) => {
+    try {
+      setError(null);
+      await reprocessDocument(guid);
+      // Refresh the list to show updated job status
+      await loadDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reprocess document");
+      throw err;
+    }
+  }, [loadDocuments]);
+
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
@@ -97,7 +109,7 @@ export function DocumentsList() {
         </button>
       </div>
 
-      <DocumentsTable documents={documents} onEdit={handleEdit} onDelete={handleDelete} />
+      <DocumentsTable documents={documents} onEdit={handleEdit} onDelete={handleDelete} onReprocess={handleReprocess} />
 
       {editTarget && (
         <EditDocumentModal
