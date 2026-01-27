@@ -36,6 +36,8 @@ export default function PdfViewer({
   const [currentPage, setCurrentPage] = useState<number>(initialPage ?? 1);
   const [pageInputValue, setPageInputValue] = useState<string>(String(initialPage ?? 1));
   const [scale, setScale] = useState<number>(1.0);
+  const [fitMode, setFitMode] = useState<"fit" | "manual">("fit");
+  const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [outline, setOutline] = useState<OutlineItem[] | null>(null);
   const [showOutline, setShowOutline] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
@@ -44,6 +46,7 @@ export default function PdfViewer({
   const [error, setError] = useState<string | null>(null);
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
 
   const onDocumentLoadSuccess = useCallback(async (pdf: PDFDocumentProxy) => {
     pdfDocRef.current = pdf;
@@ -56,6 +59,16 @@ export default function PdfViewer({
       setCurrentPage(pdf.numPages);
     } else if (initialPage && initialPage < 1) {
       setCurrentPage(1);
+    }
+
+    // Get page dimensions from the first page for fit-to-screen calculation
+    try {
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.0 });
+      setPageDimensions({ width: viewport.width, height: viewport.height });
+    } catch {
+      // Fallback to standard letter size dimensions
+      setPageDimensions({ width: 612, height: 792 });
     }
 
     // Try to load outline/TOC
@@ -120,6 +133,43 @@ export default function PdfViewer({
     }
   }, [onRequestFreshUrl, url]);
 
+  // Calculate fit-to-screen scale when in fit mode
+  const calculateFitScale = useCallback(() => {
+    if (!viewerContainerRef.current || !pageDimensions) return;
+
+    const container = viewerContainerRef.current;
+    // Account for padding (32px = 16px on each side from p-4)
+    const availableWidth = container.clientWidth - 32;
+    const availableHeight = container.clientHeight - 32;
+
+    const scaleX = availableWidth / pageDimensions.width;
+    const scaleY = availableHeight / pageDimensions.height;
+
+    // Use the smaller scale to fit the entire page, clamped to reasonable bounds
+    const fitScale = Math.min(scaleX, scaleY);
+    const clampedScale = Math.max(0.5, Math.min(3, fitScale));
+
+    setScale(clampedScale);
+  }, [pageDimensions]);
+
+  // Recalculate scale when in fit mode and dependencies change
+  useEffect(() => {
+    if (fitMode !== "fit" || !pageDimensions) return;
+
+    calculateFitScale();
+
+    // Set up ResizeObserver to recalculate on container resize
+    const container = viewerContainerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      calculateFitScale();
+    });
+
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [fitMode, pageDimensions, calculateFitScale, showOutline]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -145,10 +195,12 @@ export default function PdfViewer({
         case "+":
         case "=":
           e.preventDefault();
+          setFitMode("manual");
           setScale((prev) => Math.min(3, prev + 0.25));
           break;
         case "-":
           e.preventDefault();
+          setFitMode("manual");
           setScale((prev) => Math.max(0.5, prev - 0.25));
           break;
       }
@@ -351,9 +403,13 @@ export default function PdfViewer({
           {/* Zoom controls */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setScale((prev) => Math.max(0.5, prev - 0.25))}
+              onClick={() => {
+                setFitMode("manual");
+                setScale((prev) => Math.max(0.5, prev - 0.25));
+              }}
               disabled={scale <= 0.5}
               className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+              title="Zoom out (-)"
             >
               <svg
                 className="w-5 h-5"
@@ -369,13 +425,25 @@ export default function PdfViewer({
                 />
               </svg>
             </button>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400 w-12 text-center">
-              {Math.round(scale * 100)}%
-            </span>
             <button
-              onClick={() => setScale((prev) => Math.min(3, prev + 0.25))}
+              onClick={() => setFitMode("fit")}
+              className={`px-2 py-0.5 text-sm rounded transition-colors ${
+                fitMode === "fit"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+              }`}
+              title="Fit to screen"
+            >
+              {fitMode === "fit" ? "Fit" : `${Math.round(scale * 100)}%`}
+            </button>
+            <button
+              onClick={() => {
+                setFitMode("manual");
+                setScale((prev) => Math.min(3, prev + 0.25));
+              }}
               disabled={scale >= 3}
               className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+              title="Zoom in (+)"
             >
               <svg
                 className="w-5 h-5"
@@ -445,7 +513,7 @@ export default function PdfViewer({
         )}
 
         {/* PDF Document */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto" ref={viewerContainerRef}>
           {error ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center p-8">

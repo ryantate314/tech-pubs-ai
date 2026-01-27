@@ -70,6 +70,7 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
         chunk_contents = [row.content for row in rows]
         summaries = await summarization_service.summarize_chunks(chunk_contents, request.query)
 
+        print("Chunks are summarized")
         results = [
             ChunkResult(
                 id=row.id,
