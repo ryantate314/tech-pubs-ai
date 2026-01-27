@@ -2,7 +2,6 @@ export interface SearchRequest {
   query: string;
   limit?: number;
   min_similarity?: number;
-  category_id?: number;
   aircraft_model_id?: number;
 }
 
@@ -14,8 +13,7 @@ export interface ChunkResult {
   chapter_title: string | null;
   document_guid: string;
   document_name: string;
-  aircraft_model_code: string | null;
-  category_name: string | null;
+  aircraft_model_name: string | null;
   similarity: number;
 }
 

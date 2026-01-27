@@ -1,31 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { Category } from "@/types/categories";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AircraftModel } from "@/types/aircraft-models";
 import type { ChunkResult } from "@/types/search";
-import { fetchCategories } from "@/lib/api/categories";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { searchDocuments } from "@/lib/api/search";
 import { SearchInput } from "./SearchInput";
 import { SearchResults } from "./SearchResults";
 
-export function SearchContainer() {
-  const [categories, setCategories] = useState<Category[]>([]);
+interface SearchContainerProps {
+  initialQuery?: string;
+}
+
+export function SearchContainer({ initialQuery }: SearchContainerProps) {
   const [aircraftModels, setAircraftModels] = useState<AircraftModel[]>([]);
   const [results, setResults] = useState<ChunkResult[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery || "");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasAutoSearched = useRef(false);
 
   const loadFilterData = useCallback(async () => {
     try {
-      const [categoriesData, aircraftModelsData] = await Promise.all([
-        fetchCategories(),
-        fetchAircraftModels(),
-      ]);
-      setCategories(categoriesData);
+      const aircraftModelsData = await fetchAircraftModels();
       setAircraftModels(aircraftModelsData);
     } catch (err) {
       console.error("Failed to load filter data:", err);
@@ -36,9 +34,16 @@ export function SearchContainer() {
     loadFilterData();
   }, [loadFilterData]);
 
+  // Auto-search on mount if initialQuery is provided
+  useEffect(() => {
+    if (initialQuery && !hasAutoSearched.current) {
+      hasAutoSearched.current = true;
+      handleSearch(initialQuery);
+    }
+  }, [initialQuery]);
+
   const handleSearch = async (
     searchQuery: string,
-    categoryId?: number,
     aircraftModelId?: number
   ) => {
     setIsLoading(true);
@@ -49,9 +54,8 @@ export function SearchContainer() {
     try {
       const response = await searchDocuments({
         query: searchQuery,
-        category_id: categoryId,
         aircraft_model_id: aircraftModelId,
-        limit: 20,
+        limit: 10,
         min_similarity: 0.5,
       });
       setResults(response.results);
@@ -67,9 +71,9 @@ export function SearchContainer() {
     <div className="space-y-8">
       <SearchInput
         onSearch={handleSearch}
-        categories={categories}
         aircraftModels={aircraftModels}
         isLoading={isLoading}
+        initialQuery={initialQuery}
       />
 
       {error && (

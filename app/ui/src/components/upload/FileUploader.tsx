@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AircraftModel } from "@/types/aircraft-models";
-import type { Category } from "@/types/categories";
 import type { DocumentDetailResponse } from "@/types/documents";
 import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
 import type { SerialRangeInput, UploadProgress, UploadStatus } from "@/types/uploads";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
-import { fetchCategories } from "@/lib/api/categories";
 import { fetchPlatforms, fetchGenerations, fetchDocumentCategories, fetchDocumentTypes } from "@/lib/api/wizard";
 import { fetchDocument } from "@/lib/api/documents";
 import {
@@ -30,9 +28,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     null
   );
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   const [existingDocument, setExistingDocument] =
     useState<DocumentDetailResponse | null>(null);
@@ -46,9 +41,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
   const [selectedAircraftModelId, setSelectedAircraftModelId] = useState<
     number | null
   >(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
-    null
-  );
   const [documentName, setDocumentName] = useState("");
   const [versionName, setVersionName] = useState("");
   const [serialRanges, setSerialRanges] = useState<SerialRangeInput[]>([]);
@@ -98,9 +90,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         if (data.aircraft_model_id) {
           setSelectedAircraftModelId(data.aircraft_model_id);
         }
-        if (data.category_id) {
-          setSelectedCategoryId(data.category_id);
-        }
       } catch (err) {
         setExistingDocumentError(
           err instanceof Error ? err.message : "Failed to load document"
@@ -132,25 +121,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     loadAircraftModels();
   }, [documentGuid]);
 
-  useEffect(() => {
-    async function loadCategories() {
-      try {
-        const data = await fetchCategories();
-        setCategories(data);
-        // Only set default if not adding version to existing document
-        if (!documentGuid && data.length > 0) {
-          setSelectedCategoryId(data[0].id);
-        }
-      } catch (err) {
-        setCategoriesError(
-          err instanceof Error ? err.message : "Failed to load categories"
-        );
-      } finally {
-        setCategoriesLoading(false);
-      }
-    }
-    loadCategories();
-  }, [documentGuid]);
 
   // Load platforms on mount
   useEffect(() => {
@@ -268,7 +238,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
     if (
       !selectedFile ||
       !selectedAircraftModelId ||
-      !selectedCategoryId ||
       !selectedPlatformId ||
       !selectedGenerationId ||
       !selectedDocumentCategoryId ||
@@ -291,7 +260,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         file_size: selectedFile.size,
         document_name: documentName.trim(),
         aircraft_model_id: selectedAircraftModelId,
-        category_id: selectedCategoryId,
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
@@ -317,7 +285,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
         content_type: selectedFile.type || "application/octet-stream",
         file_size: selectedFile.size,
         aircraft_model_id: selectedAircraftModelId,
-        category_id: selectedCategoryId,
         platform_id: selectedPlatformId,
         generation_id: selectedGenerationId,
         document_type_id: selectedDocumentTypeId,
@@ -369,7 +336,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
   const canUpload =
     selectedFile &&
     selectedAircraftModelId &&
-    selectedCategoryId &&
     selectedPlatformId &&
     selectedGenerationId &&
     selectedDocumentCategoryId &&
@@ -421,7 +387,7 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
             </div>
           ) : isAddingVersion ? (
             <div className="flex h-10 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-              {existingDocument?.aircraft_model_code ?? "—"}
+              {existingDocument?.aircraft_model_name ?? "—"}
             </div>
           ) : (
             <select
@@ -442,41 +408,6 @@ export function FileUploader({ documentGuid }: FileUploaderProps) {
           )}
         </div>
 
-        <div>
-          <label
-            htmlFor="category"
-            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Category
-          </label>
-          {categoriesLoading ? (
-            <div className="flex h-10 items-center text-sm text-zinc-500">
-              Loading categories...
-            </div>
-          ) : categoriesError ? (
-            <div className="flex h-10 items-center text-sm text-red-500">
-              {categoriesError}
-            </div>
-          ) : isAddingVersion ? (
-            <div className="flex h-10 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-              {existingDocument?.category_name ?? "—"}
-            </div>
-          ) : (
-            <select
-              id="category"
-              value={selectedCategoryId ?? ""}
-              onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
-              disabled={isUploading || categories.length === 0}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-            >
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
       </div>
 
       {/* Wizard Classification: Platform & Generation */}

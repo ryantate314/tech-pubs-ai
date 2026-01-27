@@ -1,9 +1,10 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileUploader } from "@/components/upload/FileUploader";
 
-export default function UploadPage() {
+function UploadContent() {
   const searchParams = useSearchParams();
   const documentGuid = searchParams.get("documentGuid") ?? undefined;
 
@@ -24,5 +25,21 @@ export default function UploadPage() {
         <FileUploader documentGuid={documentGuid} />
       </div>
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl px-4 py-12">
+          <div className="flex items-center justify-center p-8">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <UploadContent />
+    </Suspense>
   );
 }

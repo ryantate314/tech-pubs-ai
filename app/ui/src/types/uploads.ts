@@ -2,8 +2,8 @@ export type SerialRangeType = "single" | "range" | "and_subs";
 
 export interface SerialRangeInput {
   range_type: SerialRangeType;
-  serial_start: number;
-  serial_end?: number;
+  serial_start: string;
+  serial_end?: string;
 }
 
 export interface UploadUrlRequest {
@@ -12,7 +12,6 @@ export interface UploadUrlRequest {
   file_size: number;
   document_name: string;
   aircraft_model_id: number;
-  category_id: number;
   platform_id?: number;
   generation_id?: number;
   document_type_id?: number;
@@ -33,7 +32,6 @@ export interface UploadCompleteRequest {
   content_type: string;
   file_size: number;
   aircraft_model_id: number;
-  category_id: number;
   platform_id?: number;
   generation_id?: number;
   document_type_id?: number;

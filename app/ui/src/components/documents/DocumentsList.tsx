@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { DocumentListItem } from "@/types/documents";
-import { fetchDocuments } from "@/lib/api/documents";
+import type { DocumentDetailResponse, DocumentListItem } from "@/types/documents";
+import { deleteDocument, fetchDocument, fetchDocuments } from "@/lib/api/documents";
 import { DocumentsTable } from "./DocumentsTable";
+import { EditDocumentModal } from "./EditDocumentModal";
 
 export function DocumentsList() {
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<DocumentDetailResponse | null>(null);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -21,6 +23,45 @@ export function DocumentsList() {
       setLoading(false);
     }
   }, []);
+
+  const handleEdit = useCallback(async (doc: DocumentListItem) => {
+    try {
+      setError(null);
+      const detail = await fetchDocument(doc.guid);
+      setEditTarget(detail);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load document details");
+    }
+  }, []);
+
+  const handleEditSuccess = useCallback((updated: DocumentDetailResponse) => {
+    // Update the document in the list
+    setDocuments((docs) =>
+      docs.map((d) =>
+        d.guid === updated.guid
+          ? {
+              ...d,
+              name: updated.name,
+              serial_ranges: updated.serial_ranges,
+            }
+          : d
+      )
+    );
+  }, []);
+
+  const handleDelete = useCallback(async (guid: string) => {
+    // Optimistically remove from list
+    const previousDocuments = documents;
+    setDocuments((docs) => docs.filter((d) => d.guid !== guid));
+
+    try {
+      await deleteDocument(guid);
+    } catch (err) {
+      // Restore on error
+      setDocuments(previousDocuments);
+      throw err;
+    }
+  }, [documents]);
 
   useEffect(() => {
     loadDocuments();
@@ -56,7 +97,16 @@ export function DocumentsList() {
         </button>
       </div>
 
-      <DocumentsTable documents={documents} />
+      <DocumentsTable documents={documents} onEdit={handleEdit} onDelete={handleDelete} />
+
+      {editTarget && (
+        <EditDocumentModal
+          document={editTarget}
+          open={true}
+          onClose={() => setEditTarget(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </div>
   );
 }

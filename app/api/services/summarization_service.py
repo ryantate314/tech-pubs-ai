@@ -1,4 +1,4 @@
-import asyncio
+import json
 from functools import lru_cache
 
 from openai import AsyncAzureOpenAI
@@ -29,48 +29,24 @@ class SummarizationService:
             )
         return self._client
 
-    def _build_prompt(self, chunk_content: str, query: str) -> str:
-        """Build the prompt for summarizing a chunk."""
-        return f"""Extract and summarize the relevant information from this document excerpt.
-Remove any page headers, footers, document metadata, and formatting artifacts.
-Focus on content relevant to the user's query: "{query}"
-Keep the summary concise (2-4 sentences) and factual.
+    def _build_batch_prompt(self, chunks: list[str], query: str) -> str:
+        """Build a prompt for summarizing multiple chunks in one call."""
+        chunks_text = "\n\n".join(
+            f"[CHUNK {i}]\n{chunk}" for i, chunk in enumerate(chunks)
+        )
+        return f"""Summarize each of the following document excerpts. For each chunk:
+- Remove page headers, footers, document metadata, and formatting artifacts
+- Focus on content relevant to the user's query: "{query}"
+- Keep each summary concise (2-4 sentences) and factual
 
-Document excerpt:
-{chunk_content}
+Return a JSON array of strings, one summary per chunk in the same order.
+Example: ["Summary of chunk 0", "Summary of chunk 1", ...]
 
-Summary:"""
-
-    async def _summarize_chunk(self, chunk_content: str, query: str) -> str:
-        """Summarize a single chunk using Azure OpenAI."""
-        client = self._get_client()
-
-        try:
-          response = await client.chat.completions.create(
-              model=settings.azure_openai_deployment,
-              messages=[
-                  {
-                      "role": "system",
-                      "content": "You are a technical documentation assistant. Extract and summarize relevant information concisely."
-                  },
-                  {
-                      "role": "user",
-                      "content": self._build_prompt(chunk_content, query)
-                  }
-              ],
-              max_tokens=200,
-              temperature=0.3
-          )
-
-          print("Summarized chunk: " + response.choices[0].message.content)
-        except Exception as e:
-          print(f"Error summarizing chunk", e)
-
-        return response.choices[0].message.content or chunk_content
+{chunks_text}"""
 
     async def summarize_chunks(self, chunks: list[str], query: str) -> list[str]:
         """
-        Summarize multiple chunks in parallel.
+        Summarize multiple chunks in a single API call.
 
         Args:
             chunks: List of chunk content strings to summarize
@@ -79,21 +55,49 @@ Summary:"""
         Returns:
             List of summarized strings in the same order as input chunks
         """
-        print(f"Summarizing {len(chunks)} chunks")
+        if not chunks:
+            return []
 
-        # Run all summarization tasks concurrently using native async
-        tasks = [
-            self._summarize_chunk(chunk, query)
-            for chunk in chunks
-        ]
+        print(f"Summarizing {len(chunks)} chunks in single batch call")
 
-        summaries = await asyncio.gather(*tasks, return_exceptions=True)
+        client = self._get_client()
 
-        # Handle any exceptions by falling back to original content
-        return [
-            summary if isinstance(summary, str) else chunks[i]
-            for i, summary in enumerate(summaries)
-        ]
+        try:
+            response = await client.chat.completions.create(
+                model=settings.azure_openai_deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a technical documentation assistant. Extract and summarize relevant information concisely. Always respond with valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": self._build_batch_prompt(chunks, query)
+                    }
+                ],
+                max_tokens=2000,
+                temperature=0.3
+            )
+
+            content = response.choices[0].message.content or "[]"
+            # Strip markdown code fences if present
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1].rsplit("```", 1)[0]
+            summaries = json.loads(content)
+
+            if len(summaries) != len(chunks):
+                print(f"Warning: got {len(summaries)} summaries for {len(chunks)} chunks")
+                # Pad or truncate to match
+                while len(summaries) < len(chunks):
+                    summaries.append(chunks[len(summaries)])
+                summaries = summaries[:len(chunks)]
+
+            print(f"Batch summarization complete")
+            return summaries
+
+        except Exception as e:
+            print(f"Error in batch summarization: {e}")
+            return chunks
 
 
 @lru_cache(maxsize=1)

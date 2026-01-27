@@ -126,7 +126,7 @@ export default function DocumentViewerContainer({
     <div className="h-[calc(100vh-200px)] rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
       <PdfViewer
         url={downloadData.download_url}
-        version_name={downloadData.version_name}
+        fileName={downloadData.file_name}
         initialPage={initialPage}
         onAuthError={handleAuthError}
         onRequestFreshUrl={handleRequestFreshUrl}

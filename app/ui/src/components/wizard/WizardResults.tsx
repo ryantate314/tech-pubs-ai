@@ -240,14 +240,14 @@ export function WizardResults({
               >
                 <div>
                   <Link
-                    href={`/admin/documents/${doc.guid}`}
+                    href={`/documents/${doc.guid}`}
                     className="font-medium text-zinc-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
                   >
                     {doc.name}
                   </Link>
                 </div>
                 <Link
-                  href={`/admin/documents/${doc.guid}`}
+                  href={`/documents/${doc.guid}`}
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   View

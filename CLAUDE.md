@@ -8,7 +8,10 @@ Tech Pubs v3 is a document management system for uploading, processing, and sear
 
 - **app/ui/** - NextJS 16 frontend (React 19) for document viewing, searching, and admin uploads
 - **app/api/** - Python FastAPI backend
-- **jobs/document-ingestion/** - Python job for processing/ingesting documents (runs as Azure Container App Job)
+- **jobs/** - Python container jobs for document processing (Azure Container App Jobs)
+  - **document-chunking/** - Chunks PDFs using Docling parser
+  - **document-embedding/** - Generates embeddings with BAAI/bge-base-en-v1.5
+  - **base/** - Shared Docker base image with PyTorch
 - **packages/techpubs-core/** - Shared Python library with database models and utilities
 - **infrastructure/** - Terraform configuration for Azure (azurerm provider)
 - **database/migrations/** - SQL migration files
@@ -26,6 +29,8 @@ uv sync                           # Install all dependencies (from repo root)
 ### API
 
 ```bash
+make api-run                      # Quick start (from repo root)
+# OR
 cd app/api
 cp .env.example .env              # Configure environment variables
 uv run uvicorn main:app --reload  # Start dev server at http://localhost:8000
@@ -34,6 +39,8 @@ uv run uvicorn main:app --reload  # Start dev server at http://localhost:8000
 ### UI
 
 ```bash
+make nextjs-run                   # Quick start (from repo root)
+# OR
 cd app/ui
 npm install                       # Install dependencies
 npm run dev                       # Start dev server at http://localhost:3000
@@ -43,19 +50,19 @@ npm run build                     # Production build
 
 Set `API_URL=http://localhost:8000` in `app/ui/.env.local` to connect to local API.
 
-### Document Ingestion Job
+### Document Processing Jobs
 
 ```bash
-make run-document-ingestion       # Run with .env file (from repo root)
-# OR
-cd jobs/document-ingestion
-uv run python main.py
+make run-chunking-job             # Run chunking job with .env file
+make run-embedding-job            # Run embedding job with .env file
 ```
 
 Docker builds must be run from repo root due to uv workspace:
 ```bash
-make build-document-ingestion     # Build Docker image
-make publish-document-ingestion   # Build and push to Azure Container Registry
+make publish-jobs-base            # Build and push base image (required first)
+make publish-document-chunking    # Build and push chunking job
+make publish-document-embedding   # Build and push embedding job
+make publish-all-jobs             # Build and push all jobs
 ```
 
 ### Infrastructure (Terraform)
@@ -65,6 +72,8 @@ cd infrastructure
 terraform init
 terraform plan -var="subscription_id=<YOUR_SUBSCRIPTION_ID>"
 terraform apply -var="subscription_id=<YOUR_SUBSCRIPTION_ID>"
+# OR from repo root:
+make terraform-apply              # Uses config/dev.tfvars
 ```
 
 ## Architecture
@@ -85,15 +94,17 @@ terraform apply -var="subscription_id=<YOUR_SUBSCRIPTION_ID>"
 ```
 
 1. Admin uploads PDF → Azure Blob Storage (via presigned URL from API)
-2. API queues ingestion message → Azure Queue Storage
-3. Container App Job processes: downloads document → chunks with Docling → generates embeddings (BAAI/bge-base-en-v1.5) → stores in Postgres with pgvector
-4. Users search/view documents through UI
+2. API creates DocumentJob record and queues message → Azure Queue Storage
+3. Document Chunking Job: downloads PDF → parses with Docling → stores chunks in DB
+4. Document Embedding Job: reads chunks → generates embeddings (BAAI/bge-base-en-v1.5) → stores vectors in Postgres with pgvector
+5. Users search/view documents through UI
 
 ## Shared Library (techpubs-core)
 
-`packages/techpubs-core/` contains shared code used by both the API and ingestion job:
-- Database models: `AircraftModel`, `Category`, `Document`, `DocumentVersion`, `DocumentChunk`, `DocumentJob`
+`packages/techpubs-core/` contains shared code used by both the API and processing jobs:
+- Database models: `Platform`, `Generation`, `AircraftModel`, `DocumentCategory`, `DocumentType`, `Category`, `Document`, `DocumentVersion`, `DocumentChunk`, `DocumentJob`, `DocumentSerialRange`
 - Database utilities: `get_engine`, `get_session`, `get_session_factory`
+- Embeddings utilities (optional `[embeddings]` extra): sentence-transformers wrapper
 
 ## Key Environment Variables
 
@@ -115,7 +126,10 @@ make db-validate                        # Validate applied migrations
 make db-baseline                        # Baseline existing database at V1
 ```
 
-New migrations: `database/migrations/V2__description.sql`
+Create new migration:
+```bash
+make db-add DESC=add_new_table    # Creates database/migrations/V{next}__add_new_table.sql
+```
 
 ### Azure PostgreSQL
 

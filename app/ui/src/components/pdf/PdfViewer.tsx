@@ -34,6 +34,7 @@ export default function PdfViewer({
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(initialPage ?? 1);
+  const [pageInputValue, setPageInputValue] = useState<string>(String(initialPage ?? 1));
   const [scale, setScale] = useState<number>(1.0);
   const [outline, setOutline] = useState<OutlineItem[] | null>(null);
   const [showOutline, setShowOutline] = useState<boolean>(false);
@@ -157,6 +158,11 @@ export default function PdfViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [numPages]);
 
+  // Keep page input synced when page changes via buttons/keyboard/outline
+  useEffect(() => {
+    setPageInputValue(String(currentPage));
+  }, [currentPage]);
+
   const handleOutlineClick = useCallback(async (item: OutlineItem) => {
     if (!pdfDocRef.current || !item.dest) return;
 
@@ -189,6 +195,37 @@ export default function PdfViewer({
     },
     []
   );
+
+  // Page input handlers
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === '' || /^\d+$/.test(value)) {
+      setPageInputValue(value);
+    }
+  };
+
+  const navigateToPage = (value: string) => {
+    const pageNum = parseInt(value, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= numPages) {
+      setCurrentPage(pageNum);
+    }
+    setPageInputValue(String(currentPage));
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateToPage(pageInputValue);
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setPageInputValue(String(currentPage));
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  const handlePageInputBlur = () => {
+    navigateToPage(pageInputValue);
+  };
 
   const renderOutlineItems = (
     items: OutlineItem[],
@@ -272,8 +309,21 @@ export default function PdfViewer({
                 />
               </svg>
             </button>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pageInputValue}
+              onChange={handlePageInputChange}
+              onKeyDown={handlePageInputKeyDown}
+              onBlur={handlePageInputBlur}
+              onFocus={(e) => e.target.select()}
+              disabled={!numPages}
+              aria-label="Page number"
+              className="w-12 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-center text-sm text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
+            />
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
-              {currentPage} / {numPages || "..."}
+              / {numPages || "..."}
             </span>
             <button
               onClick={() =>
@@ -422,7 +472,7 @@ export default function PdfViewer({
               loading={
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto m-4"></div>
                     <p className="text-zinc-600 dark:text-zinc-400">
                       Loading PDF...
                     </p>

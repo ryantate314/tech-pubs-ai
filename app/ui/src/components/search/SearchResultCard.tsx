@@ -30,7 +30,7 @@ function SimilarityBadge({ similarity }: { similarity: number }) {
 }
 
 export function SearchResultCard({ result }: SearchResultCardProps) {
-  const viewUrl = `/admin/documents/${result.document_guid}${result.page_number ? `?page=${result.page_number}` : ""}`;
+  const viewUrl = `/documents/${result.document_guid}${result.page_number ? `?page=${result.page_number}` : ""}`;
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -58,14 +58,9 @@ export function SearchResultCard({ result }: SearchResultCardProps) {
 
       <div className="flex items-center justify-between">
         <div className="flex flex-wrap gap-2">
-          {result.aircraft_model_code && (
+          {result.aircraft_model_name && (
             <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              {result.aircraft_model_code}
-            </span>
-          )}
-          {result.category_name && (
-            <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-              {result.category_name}
+              {result.aircraft_model_name}
             </span>
           )}
         </div>

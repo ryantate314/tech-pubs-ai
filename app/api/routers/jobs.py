@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from techpubs_core.database import get_session
-from techpubs_core.models import DocumentJob, DocumentVersion
+from techpubs_core.models import Document, DocumentJob, DocumentVersion
 
 from schemas.jobs import JobActionResponse, JobListResponse, JobResponse
 from services.queue_service import queue_service
@@ -17,7 +17,7 @@ def job_to_response(job: DocumentJob) -> JobResponse:
     return JobResponse(
         id=job.id,
         document_version_id=job.document_version_id,
-        document_name=job.document_version.name,
+        document_name=job.document_version.document.name,
         job_type=job.job_type,
         status=job.status,
         error_message=job.error_message,
@@ -37,7 +37,7 @@ def list_jobs(
 ) -> JobListResponse:
     """List document ingestion jobs with optional filters."""
     with get_session() as session:
-        query = session.query(DocumentJob).join(DocumentVersion)
+        query = session.query(DocumentJob).join(DocumentVersion).join(Document)
 
         # Default to 2 days ago if no start_date provided
         if start_date is None:
@@ -82,6 +82,7 @@ def cancel_job(job_id: int) -> JobActionResponse:
         job = (
             session.query(DocumentJob)
             .join(DocumentVersion)
+            .join(Document)
             .filter(DocumentJob.id == job_id)
             .first()
         )
@@ -113,6 +114,7 @@ def requeue_job(job_id: int) -> JobActionResponse:
         job = (
             session.query(DocumentJob)
             .join(DocumentVersion)
+            .join(Document)
             .filter(DocumentJob.id == job_id)
             .first()
         )

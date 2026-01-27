@@ -35,14 +35,14 @@ export function DocumentCard({ document }: DocumentCardProps) {
         {document.name}
       </h3>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-        {document.aircraft_model_code ?? "—"} · {document.category_name ?? "—"}
+        {document.aircraft_model_name ?? "—"}
       </p>
       <div className="mt-3 flex items-center justify-between">
         <span className="text-xs text-zinc-400 dark:text-zinc-500">
           {formatDate(document.created_at)}
         </span>
         <Link
-          href={`/admin/documents/${document.guid}`}
+          href={`/documents/${document.guid}`}
           className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           View →

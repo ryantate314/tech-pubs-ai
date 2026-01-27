@@ -35,13 +35,12 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
                 d.guid::text as document_guid,
                 d.name as document_name,
                 am.code as aircraft_model_code,
-                c.name as category_name,
+                am.name as aircraft_model_name,
                 1 - (dc.embedding <=> CAST(:query_embedding AS vector)) as similarity
             FROM document_chunks dc
             JOIN document_versions dv ON dc.document_version_id = dv.id
             JOIN documents d ON dv.document_id = d.id
             LEFT JOIN aircraft_models am ON d.aircraft_model_id = am.id
-            LEFT JOIN categories c ON d.category_id = c.id
             WHERE dc.embedding IS NOT NULL
               AND dv.deleted_at IS NULL
               AND d.deleted_at IS NULL
@@ -55,10 +54,6 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
         }
 
         # Add optional filters
-        if request.category_id is not None:
-            sql += " AND d.category_id = :category_id"
-            params["category_id"] = request.category_id
-
         if request.aircraft_model_id is not None:
             sql += " AND d.aircraft_model_id = :aircraft_model_id"
             params["aircraft_model_id"] = request.aircraft_model_id
@@ -84,8 +79,7 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
                 chapter_title=row.chapter_title,
                 document_guid=row.document_guid,
                 document_name=row.document_name,
-                aircraft_model_code=row.aircraft_model_code,
-                category_name=row.category_name,
+                aircraft_model_name=row.aircraft_model_name,
                 similarity=float(row.similarity),
             )
             for i, row in enumerate(rows)

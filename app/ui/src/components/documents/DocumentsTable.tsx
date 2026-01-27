@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { formatSerialRanges } from "@/lib/formatters";
 import type { DocumentListItem } from "@/types/documents";
 import { DocumentStatusIndicator } from "./DocumentStatusIndicator";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface DocumentsTableProps {
   documents: DocumentListItem[];
+  onEdit: (doc: DocumentListItem) => void;
+  onDelete: (guid: string) => Promise<void>;
 }
 
 function formatDate(dateString: string): string {
@@ -18,8 +21,10 @@ function formatDate(dateString: string): string {
   });
 }
 
-export function DocumentsTable({ documents }: DocumentsTableProps) {
+export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +39,17 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [openMenuId]);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(deleteTarget.guid);
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   if (documents.length === 0) {
     return (
@@ -78,14 +94,14 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
             >
               <td className="px-4 py-3">
                 <Link
-                  href={`/admin/documents/${doc.guid}`}
+                  href={`/documents/${doc.guid}`}
                   className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   {doc.name}
                 </Link>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {doc.aircraft_model_code ?? "-"}
+                {doc.aircraft_model_name ?? "-"}
               </td>
               <td className="max-w-xs px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {formatSerialRanges(doc.serial_ranges)}
@@ -121,6 +137,16 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                           : "top-full mt-1"
                       }`}
                     >
+                      <button
+                        type="button"
+                        className="block w-full cursor-pointer px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          onEdit(doc);
+                        }}
+                      >
+                        Edit
+                      </button>
                       <Link
                         href={`/admin/upload?documentGuid=${doc.guid}`}
                         className="block px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
@@ -128,6 +154,16 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                       >
                         Upload New Version
                       </Link>
+                      <button
+                        type="button"
+                        className="block w-full cursor-pointer px-4 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-700"
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setDeleteTarget(doc);
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   )}
                 </div>
@@ -136,6 +172,15 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
           ))}
         </tbody>
       </table>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete Document"
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

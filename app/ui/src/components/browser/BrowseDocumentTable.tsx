@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { DocumentListItem } from "@/types/documents";
-import { DocumentStatusIndicator } from "@/components/documents/DocumentStatusIndicator";
+import { formatSerialRanges } from "@/lib/formatters";
 
 interface BrowseDocumentTableProps {
   documents: DocumentListItem[];
@@ -37,13 +37,10 @@ export function BrowseDocumentTable({ documents }: BrowseDocumentTableProps) {
               Aircraft Model
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Category
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Created
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Status
+              Serial Numbers
             </th>
           </tr>
         </thead>
@@ -55,23 +52,20 @@ export function BrowseDocumentTable({ documents }: BrowseDocumentTableProps) {
             >
               <td className="px-4 py-3">
                 <Link
-                  href={`/admin/documents/${doc.guid}`}
+                  href={`/documents/${doc.guid}`}
                   className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   {doc.name}
                 </Link>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {doc.aircraft_model_code ?? "-"}
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {doc.category_name ?? "-"}
+                {doc.aircraft_model_name ?? "-"}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {formatDate(doc.created_at)}
               </td>
-              <td className="whitespace-nowrap px-4 py-3">
-                <DocumentStatusIndicator status={doc.latest_job_status} />
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                {formatSerialRanges(doc.serial_ranges)}
               </td>
             </tr>
           ))}

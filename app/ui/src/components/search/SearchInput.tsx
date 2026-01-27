@@ -1,28 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import type { Category } from "@/types/categories";
 import type { AircraftModel } from "@/types/aircraft-models";
 
 interface SearchInputProps {
   onSearch: (
     query: string,
-    categoryId?: number,
     aircraftModelId?: number
   ) => void;
-  categories: Category[];
   aircraftModels: AircraftModel[];
   isLoading: boolean;
+  initialQuery?: string;
 }
 
 export function SearchInput({
   onSearch,
-  categories,
   aircraftModels,
   isLoading,
+  initialQuery,
 }: SearchInputProps) {
-  const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
+  const [query, setQuery] = useState(initialQuery || "");
   const [aircraftModelId, setAircraftModelId] = useState<number | undefined>(
     undefined
   );
@@ -30,7 +27,7 @@ export function SearchInput({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      onSearch(query.trim(), categoryId, aircraftModelId);
+      onSearch(query.trim(), aircraftModelId);
     }
   };
 
@@ -61,31 +58,6 @@ export function SearchInput({
       </div>
 
       <div className="flex gap-4">
-        <div className="w-48">
-          <label
-            htmlFor="category-filter"
-            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Category
-          </label>
-          <select
-            id="category-filter"
-            value={categoryId ?? ""}
-            onChange={(e) =>
-              setCategoryId(e.target.value ? Number(e.target.value) : undefined)
-            }
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-            disabled={isLoading}
-          >
-            <option value="">All Categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="w-48">
           <label
             htmlFor="aircraft-model-filter"

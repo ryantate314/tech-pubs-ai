@@ -6,13 +6,14 @@ from sqlalchemy.orm import aliased
 from fastapi import APIRouter, HTTPException, Query
 
 from techpubs_core.database import get_session
-from techpubs_core.models import AircraftModel, Category, Document, DocumentJob, DocumentType, DocumentSerialRange, DocumentVersion
+from techpubs_core.models import AircraftModel, Document, DocumentCategory, DocumentJob, DocumentType, DocumentSerialRange, DocumentVersion
 
 from schemas.documents import (
     DocumentDetailResponse,
     DocumentDownloadUrlResponse,
     DocumentListItem,
     DocumentListResponse,
+    DocumentUpdateRequest,
     DocumentVersionDetail,
     SerialRangeResponse,
 )
@@ -62,7 +63,7 @@ def list_documents(
                 Document.id,
                 Document.guid,
                 Document.name,
-                AircraftModel.code.label("aircraft_model_code"),
+                AircraftModel.name.label("aircraft_model_name"),
                 LatestJob.status.label("latest_job_status"),
                 Document.created_at,
             )
@@ -139,7 +140,7 @@ def list_documents(
                 id=row.id,
                 guid=str(row.guid),
                 name=row.name,
-                aircraft_model_code=row.aircraft_model_code,
+                aircraft_model_name=row.aircraft_model_name,
                 latest_job_status=row.latest_job_status,
                 serial_ranges=serial_ranges_by_doc.get(row.id, []),
                 created_at=row.created_at,
@@ -167,19 +168,26 @@ def get_document(guid: str) -> DocumentDetailResponse:
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        # Get aircraft model code if exists
-        aircraft_model_code = None
+        # Get aircraft model name if exists
+        aircraft_model_name = None
         if document.aircraft_model_id:
             aircraft_model = session.query(AircraftModel).get(document.aircraft_model_id)
             if aircraft_model:
-                aircraft_model_code = aircraft_model.code
+                aircraft_model_name = aircraft_model.name
 
-        # Get category name if exists
-        category_name = None
-        if document.category_id:
-            category = session.query(Category).get(document.category_id)
-            if category:
-                category_name = category.name
+        # Get document type and category info if exists
+        document_type_id = document.document_type_id
+        document_type_name = None
+        document_category_id = None
+        document_category_name = None
+        if document_type_id:
+            document_type = session.query(DocumentType).get(document_type_id)
+            if document_type:
+                document_type_name = document_type.name
+                document_category_id = document_type.document_category_id
+                document_category = session.query(DocumentCategory).get(document_category_id)
+                if document_category:
+                    document_category_name = document_category.name
 
         # Get latest version
         latest_version = (
@@ -223,9 +231,132 @@ def get_document(guid: str) -> DocumentDetailResponse:
             guid=str(document.guid),
             name=document.name,
             aircraft_model_id=document.aircraft_model_id,
-            aircraft_model_code=aircraft_model_code,
-            category_id=document.category_id,
-            category_name=category_name,
+            aircraft_model_name=aircraft_model_name,
+            document_category_id=document_category_id,
+            document_category_name=document_category_name,
+            document_type_id=document_type_id,
+            document_type_name=document_type_name,
+            latest_version=latest_version_detail,
+            serial_ranges=serial_range_responses,
+        )
+
+
+@router.patch("/{guid}", response_model=DocumentDetailResponse)
+def update_document(guid: str, request: DocumentUpdateRequest) -> DocumentDetailResponse:
+    """Update document metadata by GUID."""
+    with get_session() as session:
+        document = (
+            session.query(Document)
+            .filter(Document.guid == guid, Document.deleted_at.is_(None))
+            .first()
+        )
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Update name if provided
+        if request.name is not None:
+            document.name = request.name
+
+        # Update document_type_id if provided (category is derived from type)
+        if request.document_type_id is not None:
+            # Verify the document type exists
+            document_type = session.query(DocumentType).get(request.document_type_id)
+            if not document_type:
+                raise HTTPException(status_code=400, detail="Invalid document type ID")
+            document.document_type_id = request.document_type_id
+        elif request.document_category_id is not None and request.document_type_id is None:
+            # If category provided but no type, clear the type
+            document.document_type_id = None
+
+        # Update serial ranges if provided (replace all)
+        if request.serial_ranges is not None:
+            # Delete existing serial ranges
+            session.query(DocumentSerialRange).filter(
+                DocumentSerialRange.document_id == document.id
+            ).delete()
+
+            # Insert new serial ranges
+            for sr in request.serial_ranges:
+                new_range = DocumentSerialRange(
+                    document_id=document.id,
+                    range_type=sr.range_type,
+                    serial_start=sr.serial_start,
+                    serial_end=sr.serial_end if sr.range_type == "range" else None,
+                )
+                session.add(new_range)
+
+        session.commit()
+
+        # Fetch updated data for response
+        # Get aircraft model name if exists
+        aircraft_model_name = None
+        if document.aircraft_model_id:
+            aircraft_model = session.query(AircraftModel).get(document.aircraft_model_id)
+            if aircraft_model:
+                aircraft_model_name = aircraft_model.name
+
+        # Get document type and category info if exists
+        document_type_id = document.document_type_id
+        document_type_name = None
+        document_category_id = None
+        document_category_name = None
+        if document_type_id:
+            document_type = session.query(DocumentType).get(document_type_id)
+            if document_type:
+                document_type_name = document_type.name
+                document_category_id = document_type.document_category_id
+                document_category = session.query(DocumentCategory).get(document_category_id)
+                if document_category:
+                    document_category_name = document_category.name
+
+        # Get latest version
+        latest_version = (
+            session.query(DocumentVersion)
+            .filter(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.deleted_at.is_(None),
+            )
+            .order_by(DocumentVersion.id.desc())
+            .first()
+        )
+
+        latest_version_detail = None
+        if latest_version:
+            latest_version_detail = DocumentVersionDetail(
+                guid=str(latest_version.guid),
+                name=latest_version.name,
+                file_name=latest_version.file_name,
+                content_type=latest_version.content_type,
+                file_size=latest_version.file_size,
+                blob_path=latest_version.blob_path,
+            )
+
+        # Get serial ranges
+        serial_ranges = (
+            session.query(DocumentSerialRange)
+            .filter(DocumentSerialRange.document_id == document.id)
+            .all()
+        )
+        serial_range_responses = [
+            SerialRangeResponse(
+                id=sr.id,
+                range_type=sr.range_type,
+                serial_start=sr.serial_start,
+                serial_end=sr.serial_end,
+            )
+            for sr in serial_ranges
+        ]
+
+        return DocumentDetailResponse(
+            guid=str(document.guid),
+            name=document.name,
+            aircraft_model_id=document.aircraft_model_id,
+            aircraft_model_name=aircraft_model_name,
+            document_category_id=document_category_id,
+            document_category_name=document_category_name,
+            document_type_id=document_type_id,
+            document_type_name=document_type_name,
             latest_version=latest_version_detail,
             serial_ranges=serial_range_responses,
         )
@@ -270,3 +401,28 @@ def get_document_download_url(guid: str) -> DocumentDownloadUrlResponse:
             file_size=latest_version.file_size,
             content_type=latest_version.content_type,
         )
+
+
+@router.delete("/{guid}", status_code=204)
+def delete_document(guid: str) -> None:
+    """Soft delete a document by GUID and cancel any incomplete jobs."""
+    with get_session() as session:
+        document = (
+            session.query(Document)
+            .filter(Document.guid == guid, Document.deleted_at.is_(None))
+            .first()
+        )
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Cancel any incomplete jobs for this document's versions
+        version_ids = [v.id for v in document.versions]
+        if version_ids:
+            session.query(DocumentJob).filter(
+                DocumentJob.document_version_id.in_(version_ids),
+                DocumentJob.status.in_(["pending", "processing"]),
+            ).update({"status": "cancelled"}, synchronize_session=False)
+
+        document.deleted_at = func.now()
+        session.commit()

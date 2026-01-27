@@ -36,7 +36,7 @@ export default async function DocumentDetailPage({
       <div className="mb-4">
         <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 mb-2">
           <Link
-            href="/admin/documents"
+            href="/"
             className="hover:text-zinc-900 dark:hover:text-white"
           >
             Documents
@@ -54,8 +54,8 @@ export default async function DocumentDetailPage({
             {document.latest_version && (
               <span>Version: {document.latest_version.name}</span>
             )}
-            {document.aircraft_model_code && (
-              <span>Model: {document.aircraft_model_code}</span>
+            {document.aircraft_model_name && (
+              <span>Model: {document.aircraft_model_name}</span>
             )}
             <span>Serial Numbers: {formatSerialRanges(document.serial_ranges)}</span>
           </div>
@@ -71,7 +71,7 @@ export default async function DocumentDetailPage({
             The requested document could not be found or may have been deleted.
           </p>
           <Link
-            href="/admin/documents"
+            href="/"
             className="inline-block mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Back to Documents

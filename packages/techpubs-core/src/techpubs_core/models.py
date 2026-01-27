@@ -182,8 +182,8 @@ class DocumentSerialRange(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     document_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("documents.id"), nullable=False)
     range_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    serial_start: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    serial_end: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    serial_start: Mapped[str] = mapped_column(String(10), nullable=False)
+    serial_end: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { DocumentListItem } from "@/types/documents";
 import type { Platform, Generation, DocumentCategory, DocumentType } from "@/types/wizard";
 import type { AircraftModel } from "@/types/aircraft-models";
@@ -12,7 +13,6 @@ import {
   fetchFilteredDocuments,
 } from "@/lib/api/wizard";
 import { fetchAircraftModels } from "@/lib/api/aircraft-models";
-import { TopBar } from "@/components/browser/TopBar";
 import { ContentHeader } from "@/components/browser/ContentHeader";
 import { DocumentCardGrid } from "@/components/browser/DocumentCardGrid";
 import { BrowseDocumentTable } from "@/components/browser/BrowseDocumentTable";
@@ -23,15 +23,17 @@ import { Sidebar } from "@/components/browser/Sidebar";
 const CARDS_PER_PAGE = 12;
 const ROWS_PER_PAGE = 20;
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchQuery = searchParams.get("search") || "";
+
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [sortBy, setSortBy] = useState("date-desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -62,14 +64,6 @@ export default function Home() {
       setSidebarCollapsed(true);
     }
   }, []);
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   // Load platforms on mount
   const loadPlatforms = useCallback(async () => {
@@ -201,7 +195,7 @@ export default function Home() {
         aircraftModelId: selectedAircraftModelId ?? undefined,
         documentCategoryId: selectedCategoryId ?? undefined,
         documentTypeId: selectedDocumentTypeId ?? undefined,
-        search: debouncedSearch || undefined,
+        search: searchQuery || undefined,
       });
       setDocuments(data.documents);
     } catch (err) {
@@ -209,7 +203,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, debouncedSearch]);
+  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, searchQuery]);
 
   useEffect(() => {
     loadDocuments();
@@ -218,7 +212,7 @@ export default function Home() {
   // Reset to page 1 when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, debouncedSearch]);
+  }, [selectedPlatformId, selectedGenerationId, selectedAircraftModelId, selectedCategoryId, selectedDocumentTypeId, searchQuery]);
 
   const handlePlatformChange = useCallback((id: number | null) => {
     setSelectedPlatformId(id);
@@ -244,10 +238,6 @@ export default function Home() {
     setCurrentPage(1);
   }, []);
 
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
@@ -271,10 +261,13 @@ export default function Home() {
     setSelectedAircraftModelId(null);
     setSelectedCategoryId(null);
     setSelectedDocumentTypeId(null);
-    setSearchQuery("");
-  }, []);
+    // Clear search from URL if present
+    if (searchQuery) {
+      router.push("/");
+    }
+  }, [searchQuery, router]);
 
-  const hasActiveFilters = selectedPlatformId !== null || selectedGenerationId !== null || selectedAircraftModelId !== null || selectedCategoryId !== null || selectedDocumentTypeId !== null || debouncedSearch !== "";
+  const hasActiveFilters = selectedPlatformId !== null || selectedGenerationId !== null || selectedAircraftModelId !== null || selectedCategoryId !== null || selectedDocumentTypeId !== null || searchQuery !== "";
 
   const sortedDocuments = useMemo(() => {
     const sorted = [...documents];
@@ -312,7 +305,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <TopBar searchQuery={searchQuery} onSearchChange={handleSearchChange} />
       <div className="mx-auto max-w-7xl px-4 py-6">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
@@ -388,5 +380,25 @@ export default function Home() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+          <div className="mx-auto max-w-7xl px-4 py-6">
+            <div className="flex items-center justify-center p-8">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Loading documents...
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }

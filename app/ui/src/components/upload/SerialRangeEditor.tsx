@@ -20,7 +20,7 @@ export function SerialRangeEditor({
   disabled = false,
 }: SerialRangeEditorProps) {
   const handleAddRange = () => {
-    onChange([...ranges, { range_type: "single", serial_start: 0 }]);
+    onChange([...ranges, { range_type: "single", serial_start: "" }]);
   };
 
   const handleRemoveRange = (index: number) => {
@@ -38,30 +38,34 @@ export function SerialRangeEditor({
   };
 
   const handleStartChange = (index: number, value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue) || numValue < 0) return;
+    // Only allow digits, max 10 characters
+    const sanitized = value.replace(/[^0-9]/g, "").slice(0, 10);
 
     const updated = [...ranges];
+    const currentEnd = updated[index].serial_end;
+    // If range type and end is less than new start, update end to match start
+    const shouldUpdateEnd =
+      updated[index].range_type === "range" &&
+      currentEnd !== undefined &&
+      sanitized !== "" &&
+      (currentEnd === "" || parseInt(currentEnd, 10) < parseInt(sanitized, 10));
+
     updated[index] = {
       ...updated[index],
-      serial_start: numValue,
-      serial_end:
-        updated[index].range_type === "range" &&
-        (updated[index].serial_end ?? 0) < numValue
-          ? numValue
-          : updated[index].serial_end,
+      serial_start: sanitized,
+      serial_end: shouldUpdateEnd ? sanitized : currentEnd,
     };
     onChange(updated);
   };
 
   const handleEndChange = (index: number, value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue) || numValue < 0) return;
+    // Only allow digits, max 10 characters
+    const sanitized = value.replace(/[^0-9]/g, "").slice(0, 10);
 
     const updated = [...ranges];
     updated[index] = {
       ...updated[index],
-      serial_end: numValue,
+      serial_end: sanitized,
     };
     onChange(updated);
   };
@@ -100,8 +104,9 @@ export function SerialRangeEditor({
               </select>
 
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
                 value={range.serial_start}
                 onChange={(e) => handleStartChange(index, e.target.value)}
                 disabled={disabled}
@@ -113,8 +118,9 @@ export function SerialRangeEditor({
                 <>
                   <span className="text-sm text-zinc-500">to</span>
                   <input
-                    type="number"
-                    min={range.serial_start}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={range.serial_end ?? range.serial_start}
                     onChange={(e) => handleEndChange(index, e.target.value)}
                     disabled={disabled}

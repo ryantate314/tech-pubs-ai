@@ -1,19 +1,40 @@
+import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class SerialRangeInput(BaseModel):
     range_type: Literal["single", "range", "and_subs"]
-    serial_start: int
-    serial_end: Optional[int] = None
+    serial_start: str
+    serial_end: Optional[str] = None
+
+    @field_validator("serial_start")
+    @classmethod
+    def validate_serial_start_format(cls, v: str) -> str:
+        if not re.match(r"^[0-9]+$", v):
+            raise ValueError("serial_start must contain only digits")
+        if len(v) > 10:
+            raise ValueError("serial_start must be at most 10 characters")
+        return v
+
+    @field_validator("serial_end")
+    @classmethod
+    def validate_serial_end_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not re.match(r"^[0-9]+$", v):
+            raise ValueError("serial_end must contain only digits")
+        if len(v) > 10:
+            raise ValueError("serial_end must be at most 10 characters")
+        return v
 
     @model_validator(mode="after")
     def validate_serial_end(self) -> "SerialRangeInput":
         if self.range_type == "range":
             if self.serial_end is None:
                 raise ValueError("serial_end is required for range type")
-            if self.serial_end < self.serial_start:
+            if int(self.serial_end) < int(self.serial_start):
                 raise ValueError("serial_end must be >= serial_start")
         elif self.serial_end is not None:
             raise ValueError("serial_end must be None for single and and_subs types")
@@ -26,10 +47,9 @@ class UploadUrlRequest(BaseModel):
     file_size: int
     document_name: str
     aircraft_model_id: int
-    category_id: int
-    platform_id: Optional[int] = None
-    generation_id: Optional[int] = None
-    document_type_id: Optional[int] = None
+    platform_id: int
+    generation_id: int
+    document_type_id: int
     version_name: str
     document_guid: Optional[str] = None
     serial_ranges: Optional[list[SerialRangeInput]] = None
@@ -47,10 +67,9 @@ class UploadCompleteRequest(BaseModel):
     content_type: str
     file_size: int
     aircraft_model_id: int
-    category_id: int
-    platform_id: Optional[int] = None
-    generation_id: Optional[int] = None
-    document_type_id: Optional[int] = None
+    platform_id: int
+    generation_id: int
+    document_type_id: int
     version_name: str
     document_guid: Optional[str] = None
     serial_ranges: Optional[list[SerialRangeInput]] = None
