@@ -20,6 +20,7 @@ from techpubs_core import (
     DOCUMENTS_CONTAINER,
     DocumentChunk,
     DocumentJob,
+    DocumentVersion,
     get_session,
 )
 
@@ -290,21 +291,41 @@ def store_chunks_without_embeddings(
     chunks: Iterator[dict],
     document_version_id: int,
     session,
-) -> list[DocumentChunk]:
+    tokenizer=None,
+) -> tuple[list[DocumentChunk], int]:
     """
     Store chunks in the database without embeddings.
 
-    Returns the list of created DocumentChunk objects.
+    Args:
+        chunks: Iterator of chunk dictionaries with content and metadata
+        document_version_id: ID of the document version
+        session: Database session
+        tokenizer: Optional HuggingFace tokenizer for accurate token counting.
+                   If None, falls back to word splitting approximation.
+
+    Returns:
+        Tuple of (list of created DocumentChunk objects, total token count)
     """
     stored_chunks = []
+    total_token_count = 0
 
     for chunk in chunks:
+        content = chunk["content"]
+
+        # Use tokenizer for accurate count, fall back to word split
+        if tokenizer is not None:
+            token_count = len(tokenizer.encode(content, add_special_tokens=False))
+        else:
+            token_count = len(content.split())
+
+        total_token_count += token_count
+
         document_chunk = DocumentChunk(
             document_version_id=document_version_id,
             chunk_index=chunk["chunk_index"],
-            content=chunk["content"],
+            content=content,
             embedding=None,  # Will be filled in by embedding job
-            token_count=len(chunk["content"].split()),
+            token_count=token_count,
             page_number=chunk["page_number"],
             chapter_title=chunk.get("chapter_title"),
         )
@@ -314,7 +335,7 @@ def store_chunks_without_embeddings(
         if len(stored_chunks) % 100 == 0:
             print(f"  Stored {len(stored_chunks)} chunks...")
 
-    return stored_chunks
+    return stored_chunks, total_token_count
 
 
 def create_embedding_jobs(
@@ -423,14 +444,22 @@ def process_chunking_job(job_id: int) -> None:
                 job.completed_at = datetime.now()
                 return
 
-            store_chunks_without_embeddings(
+            # Initialize tokenizer for accurate token counting
+            print("Loading tokenizer for token counting...")
+            tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL_NAME)
+
+            _, total_token_count = store_chunks_without_embeddings(
                 iter(chunks),
                 document_version.id,
                 session,
+                tokenizer=tokenizer,
             )
+
+            # Update document version with total token count
+            document_version.total_token_count = total_token_count
             session.flush()  # Ensure chunks are in DB before creating embedding jobs
 
-            print(f"Stored {total_chunks} chunks, creating embedding jobs...")
+            print(f"Stored {total_chunks} chunks ({total_token_count:,} tokens), creating embedding jobs...")
 
             # Create embedding jobs for batches
             embedding_jobs = create_embedding_jobs(
@@ -453,6 +482,7 @@ def process_chunking_job(job_id: int) -> None:
             print(f"Successfully processed chunking job {job_id}")
             print(f"  - Document Version ID: {document_version.id}")
             print(f"  - Chunks stored: {total_chunks}")
+            print(f"  - Total tokens: {total_token_count:,}")
             print(f"  - Embedding jobs created: {len(embedding_jobs)}")
 
         except Exception as e:

@@ -125,6 +125,7 @@ class DocumentVersion(Base):
     content_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     blob_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    total_token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
