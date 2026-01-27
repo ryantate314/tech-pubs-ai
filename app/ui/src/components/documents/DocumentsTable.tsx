@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { formatSerialRanges } from "@/lib/formatters";
 import type { DocumentListItem } from "@/types/documents";
 import { DocumentStatusIndicator } from "./DocumentStatusIndicator";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DropdownMenu, DropdownMenuItem, calculateDropdownPosition } from "@/components/ui/DropdownMenu";
 
 interface DocumentsTableProps {
   documents: DocumentListItem[];
@@ -23,22 +24,9 @@ function formatDate(dateString: string): string {
 
 export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; placement: "above" | "below" } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpenMenuId(null);
-      }
-    }
-
-    if (openMenuId) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [openMenuId]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -87,7 +75,7 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {documents.map((doc, index) => (
+          {documents.map((doc) => (
             <tr
               key={doc.id}
               className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
@@ -112,61 +100,65 @@ export function DocumentsTable({ documents, onEdit, onDelete }: DocumentsTablePr
               <td className="whitespace-nowrap px-4 py-3">
                 <DocumentStatusIndicator status={doc.latest_job_status} />
               </td>
-              <td className="relative whitespace-nowrap px-4 py-3 text-right">
-                <div ref={openMenuId === doc.guid ? menuRef : undefined}>
-                  <button
-                    onClick={() =>
-                      setOpenMenuId(openMenuId === doc.guid ? null : doc.guid)
+              <td className="whitespace-nowrap px-4 py-3 text-right">
+                <DropdownMenu
+                  open={openMenuId === doc.guid}
+                  position={openMenuId === doc.guid ? menuPosition : null}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setOpenMenuId(null);
+                      setMenuPosition(null);
                     }
-                    className="cursor-pointer rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                    aria-label="Actions"
+                  }}
+                  trigger={
+                    <button
+                      onClick={(e) => {
+                        if (openMenuId === doc.guid) {
+                          setOpenMenuId(null);
+                          setMenuPosition(null);
+                        } else {
+                          const pos = calculateDropdownPosition(e.currentTarget);
+                          setMenuPosition(pos);
+                          setOpenMenuId(doc.guid);
+                        }
+                      }}
+                      className="cursor-pointer rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                      aria-label="Actions"
+                    >
+                      <svg
+                        className="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
+                  }
+                >
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onEdit(doc);
+                    }}
                   >
-                    <svg
-                      className="h-5 w-5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                    </svg>
-                  </button>
-                  {openMenuId === doc.guid && (
-                    <div
-                      className={`absolute right-4 z-10 w-48 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 ${
-                        index >= documents.length - 2
-                          ? "bottom-full mb-1"
-                          : "top-full mt-1"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="block w-full cursor-pointer px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          onEdit(doc);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <Link
-                        href={`/admin/upload?documentGuid=${doc.guid}`}
-                        className="block px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                        onClick={() => setOpenMenuId(null)}
-                      >
-                        Upload New Version
-                      </Link>
-                      <button
-                        type="button"
-                        className="block w-full cursor-pointer px-4 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-700"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          setDeleteTarget(doc);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    href={`/admin/upload?documentGuid=${doc.guid}`}
+                    onClick={() => setOpenMenuId(null)}
+                  >
+                    Upload New Version
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="danger"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setDeleteTarget(doc);
+                    }}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenu>
               </td>
             </tr>
           ))}

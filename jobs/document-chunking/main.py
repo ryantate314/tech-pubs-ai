@@ -29,7 +29,7 @@ EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
 EMBEDDING_MODEL_MAX_TOKENS = 512
 
 # Batch size for embedding jobs (number of chunks per job)
-EMBEDDING_BATCH_SIZE = 100
+EMBEDDING_BATCH_SIZE = 500
 
 # Thresholds for determining large PDFs (configurable via env vars)
 LARGE_PDF_PAGE_THRESHOLD = int(os.environ.get("LARGE_PDF_PAGE_THRESHOLD", "100"))
