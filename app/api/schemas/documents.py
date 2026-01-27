@@ -1,7 +1,17 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
+
+
+class SerialRangeResponse(BaseModel):
+    id: int
+    range_type: Literal["single", "range", "and_subs"]
+    serial_start: int
+    serial_end: Optional[int] = None
+
+    class Config:
+        from_attributes = True
 
 
 class DocumentListItem(BaseModel):
@@ -9,8 +19,8 @@ class DocumentListItem(BaseModel):
     guid: str
     name: str
     aircraft_model_code: Optional[str] = None
-    category_name: Optional[str] = None
     latest_job_status: Optional[str] = None
+    serial_ranges: list[SerialRangeResponse] = []
     created_at: datetime
 
     class Config:
@@ -42,6 +52,7 @@ class DocumentDetailResponse(BaseModel):
     category_id: Optional[int] = None
     category_name: Optional[str] = None
     latest_version: Optional[DocumentVersionDetail] = None
+    serial_ranges: list[SerialRangeResponse] = []
 
     class Config:
         from_attributes = True

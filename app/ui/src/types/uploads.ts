@@ -1,3 +1,11 @@
+export type SerialRangeType = "single" | "range" | "and_subs";
+
+export interface SerialRangeInput {
+  range_type: SerialRangeType;
+  serial_start: number;
+  serial_end?: number;
+}
+
 export interface UploadUrlRequest {
   filename: string;
   content_type: string;
@@ -10,6 +18,7 @@ export interface UploadUrlRequest {
   document_type_id?: number;
   version_name: string;
   document_guid?: string;
+  serial_ranges?: SerialRangeInput[];
 }
 
 export interface UploadUrlResponse {
@@ -30,6 +39,7 @@ export interface UploadCompleteRequest {
   document_type_id?: number;
   version_name: string;
   document_guid?: string;
+  serial_ranges?: SerialRangeInput[];
 }
 
 export interface UploadCompleteResponse {

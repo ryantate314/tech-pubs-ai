@@ -9,6 +9,7 @@ from techpubs_core.models import (
     Document,
     DocumentJob,
     DocumentType,
+    DocumentSerialRange,
     DocumentVersion,
     Generation,
     Platform,
@@ -165,6 +166,17 @@ def complete_upload(request: UploadCompleteRequest) -> UploadCompleteResponse:
             )
             session.add(document)
             session.flush()
+
+            # Create serial ranges for new document
+            if request.serial_ranges:
+                for sr in request.serial_ranges:
+                    serial_range = DocumentSerialRange(
+                        document_id=document.id,
+                        range_type=sr.range_type,
+                        serial_start=sr.serial_start,
+                        serial_end=sr.serial_end,
+                    )
+                    session.add(serial_range)
 
         document_version = DocumentVersion(
             guid=uuid.uuid4(),

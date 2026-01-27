@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { formatSerialRanges } from "@/lib/formatters";
 import type { DocumentListItem } from "@/types/documents";
 import { DocumentStatusIndicator } from "./DocumentStatusIndicator";
 
@@ -56,7 +57,7 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
               Aircraft Model
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Category
+              Serial Numbers
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Created
@@ -86,8 +87,8 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {doc.aircraft_model_code ?? "-"}
               </td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {doc.category_name ?? "-"}
+              <td className="max-w-xs px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                {formatSerialRanges(doc.serial_ranges)}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                 {formatDate(doc.created_at)}
