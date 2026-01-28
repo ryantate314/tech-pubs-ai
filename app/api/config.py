@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = "gpt-4o"
+    agent_search_max_iterations: int = 2  # Keep latency under 5s
 
 
 settings = Settings()
