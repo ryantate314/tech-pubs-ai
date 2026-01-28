@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     storage_account_url: str = ""
     storage_queue_url: str = ""
     chunking_queue_name: str = "document-chunking"
+    embedding_queue_name: str = "document-embedding"
     database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     azure_openai_endpoint: str = ""

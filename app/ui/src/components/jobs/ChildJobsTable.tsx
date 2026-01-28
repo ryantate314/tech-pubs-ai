@@ -1,10 +1,8 @@
-import Link from "next/link";
-import type { ParentJob } from "@/types/jobs";
-import { JobProgressIndicator } from "./JobProgressIndicator";
+import type { ChildJob } from "@/types/jobs";
 import { JobStatusBadge } from "./JobStatusBadge";
 
-interface JobsTableProps {
-  jobs: ParentJob[];
+interface ChildJobsTableProps {
+  jobs: ChildJob[];
   onCancel: (jobId: number) => void;
   onRequeue: (jobId: number) => void;
   actionInProgress: number | null;
@@ -38,17 +36,25 @@ function formatDuration(
   return `${hours}h ${remainingMinutes}m`;
 }
 
-export function JobsTable({
+function formatChunkRange(
+  startIndex: number | null,
+  endIndex: number | null
+): string {
+  if (startIndex === null || endIndex === null) return "-";
+  return `${startIndex}-${endIndex}`;
+}
+
+export function ChildJobsTable({
   jobs,
   onCancel,
   onRequeue,
   actionInProgress,
-}: JobsTableProps) {
+}: ChildJobsTableProps) {
   if (jobs.length === 0) {
     return (
       <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          No jobs found matching your filters.
+          No child jobs found.
         </p>
       </div>
     );
@@ -69,25 +75,19 @@ export function JobsTable({
               scope="col"
               className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
             >
-              Document
+              Type
             </th>
             <th
               scope="col"
               className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
             >
-              Version
+              Chunk Range
             </th>
             <th
               scope="col"
               className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
             >
               Status
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
-            >
-              Progress
             </th>
             <th
               scope="col"
@@ -121,22 +121,14 @@ export function JobsTable({
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100">
                 {job.id}
               </td>
-              <td className="max-w-xs truncate px-4 py-3 text-sm">
-                <Link
-                  href={`/admin/jobs/${job.id}`}
-                  className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  {job.document_name}
-                </Link>
+              <td className="whitespace-nowrap px-4 py-3 text-sm capitalize text-zinc-600 dark:text-zinc-400">
+                {job.job_type}
               </td>
-              <td className="max-w-xs truncate px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {job.document_version}
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                {formatChunkRange(job.chunk_start_index, job.chunk_end_index)}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm">
                 <JobStatusBadge status={job.status} />
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm">
-                <JobProgressIndicator counts={job.child_job_counts} />
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">
                 {formatDate(job.created_at)}

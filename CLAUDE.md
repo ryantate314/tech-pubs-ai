@@ -99,6 +99,29 @@ make terraform-apply              # Uses config/dev.tfvars
 4. Document Embedding Job: reads chunks → generates embeddings (BAAI/bge-base-en-v1.5) → stores vectors in Postgres with pgvector
 5. Users search/view documents through UI
 
+## API Proxy Pattern (IMPORTANT)
+
+The UI does NOT call the FastAPI backend directly. All API calls go through NextJS API route handlers that proxy to the backend:
+
+```
+React Component → lib/api/client.ts → app/api/.../route.ts → lib/api/server.ts → FastAPI
+```
+
+**When adding or modifying API endpoints, you MUST update all layers:**
+
+1. **FastAPI endpoint** (`app/api/routers/`) - The actual backend logic
+2. **NextJS proxy route** (`app/ui/src/app/api/.../route.ts`) - Proxies to FastAPI using `serverFetch`
+3. **Client API function** (`app/ui/src/lib/api/`) - Calls the NextJS route using `apiRequest`
+4. **TypeScript types** (`app/ui/src/types/`) - Request/response types
+
+Example for a new `/api/jobs/{id}` endpoint:
+- `app/api/routers/jobs.py` - FastAPI route
+- `app/ui/src/app/api/jobs/[id]/route.ts` - NextJS proxy
+- `app/ui/src/lib/api/jobs.ts` - Client function
+- `app/ui/src/types/jobs.ts` - Types
+
+**Do not skip step 2 (NextJS proxy route)** - the frontend cannot reach the FastAPI backend without it.
+
 ## Shared Library (techpubs-core)
 
 `packages/techpubs-core/` contains shared code used by both the API and processing jobs:

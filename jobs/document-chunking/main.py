@@ -12,10 +12,10 @@ import fitz  # PyMuPDF
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.queue import QueueClient
+import tiktoken
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from transformers import AutoTokenizer
+from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 
 from techpubs_core import (
     DOCUMENTS_CONTAINER,
@@ -25,10 +25,12 @@ from techpubs_core import (
     get_session,
 )
 
-# Embedding model name (used for tokenizer in chunking)
-# Defined here to avoid importing sentence-transformers
-EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
-EMBEDDING_MODEL_MAX_TOKENS = 512
+# OpenAI text-embedding-3-small model parameters
+# - Max input: 8191 tokens
+# - Recommended chunk size: ~1000 tokens for optimal retrieval
+# - Uses cl100k_base tokenizer (same as GPT-4)
+EMBEDDING_MODEL_TOKENIZER = "cl100k_base"
+EMBEDDING_MODEL_MAX_TOKENS = 1000
 
 # Batch size for embedding jobs (number of chunks per job)
 EMBEDDING_BATCH_SIZE = 500
@@ -132,7 +134,7 @@ def extract_chapter_pdf(source_path: str, start_page: int, end_page: int) -> str
         return tmp.name
 
 
-def extract_text_chunks_simple(file_path: str, max_tokens: int = 400) -> Iterator[dict]:
+def extract_text_chunks_simple(file_path: str, max_tokens: int = EMBEDDING_MODEL_MAX_TOKENS) -> Iterator[dict]:
     """Page-based text extraction with sentence-boundary chunking.
 
     Used for large PDFs without a valid TOC.
@@ -177,7 +179,7 @@ def extract_text_chunks_docling(file_path: str) -> Iterator[dict]:
 
     Uses tokenizer-aware chunking that respects document structure (headings,
     sections, paragraphs) and produces chunks sized appropriately for the
-    embedding model.
+    embedding model (text-embedding-3-small).
 
     Args:
         file_path: Path to the document file to process.
@@ -187,14 +189,15 @@ def extract_text_chunks_docling(file_path: str) -> Iterator[dict]:
     converter = DocumentConverter()
     result = converter.convert(file_path)
 
-    tokenizer = HuggingFaceTokenizer(
-        tokenizer=AutoTokenizer.from_pretrained(EMBEDDING_MODEL_NAME),
-        # max_tokens=EMBEDDING_MODEL_MAX_TOKENS,
+    # Use OpenAI's cl100k_base tokenizer (used by text-embedding-3-small)
+    # max_tokens is required for OpenAI tokenizers
+    tokenizer = OpenAITokenizer(
+        tokenizer=tiktoken.get_encoding(EMBEDDING_MODEL_TOKENIZER),
+        max_tokens=EMBEDDING_MODEL_MAX_TOKENS,
     )
 
     # Use HybridChunker with tokenizer matching our embedding model
     # This ensures chunks are properly sized for embedding and respect document structure
-    # Use 300 max_tokens to leave room for heading context added by contextualize()
     chunker = HybridChunker(
         tokenizer=tokenizer,
         merge_peers=True,
@@ -210,10 +213,11 @@ def extract_text_chunks_docling(file_path: str) -> Iterator[dict]:
 
         # Truncate to model's max sequence length if needed
         # This can happen when contextualize() adds long heading hierarchies
-        tokens = tokenizer.tokenize(content)
+        enc = tiktoken.get_encoding(EMBEDDING_MODEL_TOKENIZER)
+        tokens = enc.encode(content)
         if len(tokens) > EMBEDDING_MODEL_MAX_TOKENS:
             tokens = tokens[:EMBEDDING_MODEL_MAX_TOKENS]
-            content = tokenizer.convert_tokens_to_string(tokens)
+            content = enc.decode(tokens)
 
         # Extract page number from chunk metadata if available
         page_number = None
@@ -315,7 +319,7 @@ def store_chunks_without_embeddings(
 
         # Use tokenizer for accurate count, fall back to word split
         if tokenizer is not None:
-            token_count = len(tokenizer.encode(content, add_special_tokens=False))
+            token_count = len(tokenizer.encode(content))
         else:
             token_count = len(content.split())
 
@@ -447,7 +451,7 @@ def process_chunking_job(job_id: int) -> None:
 
             # Initialize tokenizer for accurate token counting
             print("Loading tokenizer for token counting...")
-            tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL_NAME)
+            tokenizer = tiktoken.get_encoding(EMBEDDING_MODEL_TOKENIZER)
 
             _, total_token_count = store_chunks_without_embeddings(
                 iter(chunks),
