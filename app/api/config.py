@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     azure_openai_endpoint: str = ""
-    azure_openai_deployment: str = "gpt-4o"
-    agent_search_max_iterations: int = 2  # Keep latency under 5s
+    azure_openai_deployment: str = "gpt-4o-mini"
+    agent_search_max_iterations: int = 4  # Max agent iterations before stopping
 
     # Search caching
     cache_enabled: bool = True

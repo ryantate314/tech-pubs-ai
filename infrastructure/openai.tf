@@ -8,17 +8,17 @@ resource "azurerm_cognitive_account" "openai" {
   custom_subdomain_name = "cog-${local.workload}-${var.environment}"
 }
 
-resource "azurerm_cognitive_deployment" "gpt4o" {
-  name                 = "gpt-4o"
+resource "azurerm_cognitive_deployment" "gpt4o_mini" {
+  name                 = "gpt-4o-mini"
   cognitive_account_id = azurerm_cognitive_account.openai.id
   model {
     format  = "OpenAI"
-    name    = "gpt-4o"
-    version = "2024-08-06"
+    name    = "gpt-4o-mini"
+    version = "2024-07-18"
   }
   sku {
     name     = "Standard"
-    capacity = 10
+    capacity = 50
   }
 }
 

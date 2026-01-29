@@ -1,12 +1,22 @@
 """Tools for the search agent."""
 
-from pydantic import BaseModel, Field
+import math
+import time
+
+from pydantic import BaseModel
 from pydantic_ai import RunContext
 from sqlalchemy import text
 
 from techpubs_core.embeddings import generate_embedding
 
 from .dependencies import SearchAgentDeps
+
+
+def _sanitize_similarity(value: float) -> float:
+    """Sanitize similarity score - replace NaN/Inf with 0.0."""
+    if math.isnan(value) or math.isinf(value):
+        return 0.0
+    return value
 
 
 class VectorSearchResult(BaseModel):
@@ -49,7 +59,10 @@ def vector_search(
     Returns:
         List of matching chunks with content, metadata, and similarity scores
     """
+    start_time = time.perf_counter()
     deps = ctx.deps
+
+    print(f"DEBUG: vector_search called with query: '{query[:80]}{'...' if len(query) > 80 else ''}'")
 
     # Use provided min_similarity or fall back to deps default
     effective_min_similarity = (
@@ -59,8 +72,11 @@ def vector_search(
     # Limit results to configured max
     effective_limit = min(limit, deps.max_results)
 
-    # Generate embedding for the query
+    # Generate embedding for the query (this calls Azure OpenAI)
+    embed_start = time.perf_counter()
     query_embedding = generate_embedding(query)
+    embed_elapsed = (time.perf_counter() - embed_start) * 1000
+    print(f"DEBUG: vector_search embedding took {embed_elapsed:.2f}ms")
 
     sql = """
         SELECT
@@ -95,6 +111,9 @@ def vector_search(
     result = deps.session.execute(text(sql), params)
     rows = result.fetchall()
 
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    print(f"DEBUG: vector_search completed in {elapsed_ms:.2f}ms, found {len(rows)} results")
+
     return [
         VectorSearchResult(
             chunk_id=row.chunk_id,
@@ -104,7 +123,7 @@ def vector_search(
             document_guid=row.document_guid,
             document_name=row.document_name,
             aircraft_model_name=row.aircraft_model_name,
-            similarity=float(row.similarity),
+            similarity=_sanitize_similarity(float(row.similarity)),
             chunk_index=row.chunk_index,
             document_version_id=row.document_version_id,
         )
@@ -129,6 +148,9 @@ def get_chunk_context(
     Returns:
         ChunkContext with the target chunk and its neighbors, or None if chunk not found
     """
+    start_time = time.perf_counter()
+    print(f"DEBUG: get_chunk_context called for chunk_id={chunk_id}, before={before}, after={after}")
+
     deps = ctx.deps
 
     # First get the target chunk to find its position
@@ -226,6 +248,9 @@ def get_chunk_context(
             before_chunks.append(chunk)
         else:
             after_chunks.append(chunk)
+
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    print(f"DEBUG: get_chunk_context completed in {elapsed_ms:.2f}ms, found {len(before_chunks)} before, {len(after_chunks)} after")
 
     return ChunkContext(
         target_chunk=target_chunk,

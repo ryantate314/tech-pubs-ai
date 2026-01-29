@@ -1,3 +1,6 @@
+import math
+import time
+
 from sqlalchemy import text
 
 from fastapi import APIRouter
@@ -15,6 +18,16 @@ from services.search_agent import (
 )
 
 router = APIRouter(prefix="/api/search", tags=["search"])
+
+
+def _sanitize_similarity(value: float) -> float:
+    """Sanitize similarity score for JSON serialization.
+
+    Replaces NaN and Inf with 0.0 since JSON doesn't support these values.
+    """
+    if math.isnan(value) or math.isinf(value):
+        return 0.0
+    return value
 
 
 async def _fallback_search(
@@ -67,7 +80,7 @@ async def _fallback_search(
                 document_guid=row.document_guid,
                 document_name=row.document_name,
                 aircraft_model_name=row.aircraft_model_name,
-                similarity=float(row.similarity),
+                similarity=_sanitize_similarity(float(row.similarity)),
             )
             for row in rows
         ]
@@ -89,6 +102,9 @@ async def _execute_agent_search(
 
     # Run the agent with usage limits to prevent runaway iterations
     # request_limit of max_iterations + 1 allows for the final response
+    print(f"DEBUG: Starting agent search for query: '{request.query[:80]}{'...' if len(request.query) > 80 else ''}'")
+    agent_start = time.perf_counter()
+
     result = await agent.run(
         f"Find relevant passages for: {request.query}",
         deps=deps,
@@ -97,12 +113,19 @@ async def _execute_agent_search(
         ),
     )
 
+    agent_elapsed = (time.perf_counter() - agent_start) * 1000
+
+    # Log agent LLM usage
+    usage = result.usage()
+    print(f"DEBUG: Agent LLM call completed in {agent_elapsed:.2f}ms")
+    print(f"DEBUG: Agent usage - requests: {usage.requests}, input_tokens: {usage.input_tokens}, output_tokens: {usage.output_tokens}, total_tokens: {usage.total_tokens}")
     print(f"Agent returned {len(result.output.results)} results")
 
     # Sort by similarity descending and limit results
+    # Use sanitized similarity for sorting to handle NaN values
     sorted_results = sorted(
         result.output.results,
-        key=lambda p: p.similarity,
+        key=lambda p: _sanitize_similarity(p.similarity),
         reverse=True,
     )[: request.limit]
 
@@ -117,7 +140,7 @@ async def _execute_agent_search(
             document_guid=p.document_guid,
             document_name=p.document_name,
             aircraft_model_name=p.aircraft_model_name,
-            similarity=p.similarity,
+            similarity=_sanitize_similarity(p.similarity),
         )
         for p in sorted_results
     ]
@@ -166,10 +189,13 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
             print(f"Cache miss for query: {request.query[:50]}...")
 
         # Execute search
+        used_fallback = False
         try:
             response = await _execute_agent_search(request, session)
+            print(f"DEBUG: Agent search completed with {response.total_found} results")
         except Exception as e:
             print(f"Agent search failed, falling back to simple search: {e}")
+            used_fallback = True
             results = await _fallback_search(
                 request.query,
                 request.limit,
@@ -181,8 +207,8 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
                 total_found=len(results),
             )
 
-        # Cache the result
-        if settings.cache_enabled:
+        # Only cache agent results, not fallback results
+        if settings.cache_enabled and not used_fallback:
             cache_service.cache_result(
                 cache_key,
                 request.query,

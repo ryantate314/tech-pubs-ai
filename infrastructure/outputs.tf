@@ -50,8 +50,8 @@ output "openai_endpoint" {
 }
 
 output "openai_deployment_name" {
-  value       = azurerm_cognitive_deployment.gpt4o.name
-  description = "The name of the GPT-4o deployment"
+  value       = azurerm_cognitive_deployment.gpt4o_mini.name
+  description = "The name of the GPT-4o-mini deployment"
 }
 
 output "openai_embedding_deployment_name" {
