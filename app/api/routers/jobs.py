@@ -230,8 +230,16 @@ def requeue_job(job_id: int) -> JobActionResponse:
         session.commit()
         session.refresh(job)
 
-        # Send message to queue
-        queue_service.send_chunking_job_message(job.id)
+        # Send message to the appropriate queue based on job type
+        if job.job_type == "chunking":
+            queue_service.send_chunking_job_message(job.id)
+        elif job.job_type == "embedding":
+            queue_service.send_embedding_job_message(job.id)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown job type '{job.job_type}'",
+            )
 
         return JobActionResponse(
             success=True,

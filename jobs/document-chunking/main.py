@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import sys
@@ -9,9 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import fitz  # PyMuPDF
-from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
-from azure.storage.queue import QueueClient
 import tiktoken
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
@@ -22,6 +19,9 @@ from techpubs_core import (
     DocumentChunk,
     DocumentJob,
     DocumentVersion,
+    JobQueueConsumer,
+    JobQueueProducer,
+    get_credential,
     get_session,
 )
 
@@ -38,48 +38,6 @@ EMBEDDING_BATCH_SIZE = 500
 # Thresholds for determining large PDFs (configurable via env vars)
 LARGE_PDF_PAGE_THRESHOLD = int(os.environ.get("LARGE_PDF_PAGE_THRESHOLD", "100"))
 LARGE_PDF_SIZE_MB_THRESHOLD = int(os.environ.get("LARGE_PDF_SIZE_MB_THRESHOLD", "10"))
-
-
-def get_credential() -> DefaultAzureCredential:
-    """Create a credential using managed identity."""
-    client_id = os.environ.get("AZURE_CLIENT_ID")
-    if not client_id:
-        print("WARNING: AZURE_CLIENT_ID not set. Managed identity authentication may fail for user-assigned identities.")
-    return DefaultAzureCredential(managed_identity_client_id=client_id)
-
-
-def get_queue_client() -> QueueClient:
-    """Create a QueueClient for the main job queue using managed identity."""
-    credential = get_credential()
-    queue_url = os.environ.get("STORAGE_QUEUE_URL")
-    queue_name = os.environ.get("QUEUE_NAME")
-
-    if not queue_url or not queue_name:
-        raise ValueError("STORAGE_QUEUE_URL and QUEUE_NAME environment variables must be set")
-
-    account_url = queue_url.rstrip("/")
-    return QueueClient(
-        account_url=account_url,
-        queue_name=queue_name,
-        credential=credential,
-    )
-
-
-def get_embedding_queue_client() -> QueueClient:
-    """Create a QueueClient for the embedding queue."""
-    credential = get_credential()
-    queue_url = os.environ.get("STORAGE_QUEUE_URL")
-    queue_name = os.environ.get("EMBEDDING_QUEUE_NAME")
-
-    if not queue_url or not queue_name:
-        raise ValueError("STORAGE_QUEUE_URL and EMBEDDING_QUEUE_NAME environment variables must be set")
-
-    account_url = queue_url.rstrip("/")
-    return QueueClient(
-        account_url=account_url,
-        queue_name=queue_name,
-        credential=credential,
-    )
 
 
 def download_blob_to_file(storage_account_url: str, blob_path: str, file_path: str) -> int:
@@ -375,11 +333,14 @@ def create_embedding_jobs(
 
 def queue_embedding_jobs(embedding_jobs: list[DocumentJob]) -> None:
     """Queue embedding jobs to the embedding queue."""
-    queue_client = get_embedding_queue_client()
+    embedding_queue_name = os.environ.get("EMBEDDING_QUEUE_NAME")
+    if not embedding_queue_name:
+        raise ValueError("EMBEDDING_QUEUE_NAME environment variable must be set")
+
+    producer = JobQueueProducer(queue_name=embedding_queue_name)
 
     for job in embedding_jobs:
-        message = json.dumps({"job_id": job.id})
-        queue_client.send_message(message)
+        producer.send_job(job.id)
         print(f"  Queued embedding job {job.id} (chunks {job.chunk_start_index}-{job.chunk_end_index})")
 
 
@@ -502,49 +463,33 @@ def process_chunking_job(job_id: int) -> None:
                 os.unlink(tmp_path)
 
 
-def process_queue_message(message_content: str) -> int:
-    """
-    Parse queue message and return the job ID.
-
-    Expected message format: {"job_id": 123}
-    """
-    try:
-        data = json.loads(message_content)
-        job_id = data.get("job_id")
-        if not job_id:
-            raise ValueError("Message missing 'job_id' field")
-        return int(job_id)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in queue message: {e}")
-
-
 def main():
     print("Document chunking job started")
 
     try:
-        queue_client = get_queue_client()
+        queue_name = os.environ.get("QUEUE_NAME")
+        if not queue_name:
+            raise ValueError("QUEUE_NAME environment variable must be set")
 
-        # Receive messages from the queue
-        # visibility_timeout ensures the message is hidden from other consumers while processing
-        messages = queue_client.receive_messages(visibility_timeout=600, max_messages=1)
+        # Use 600s visibility timeout for chunking jobs (longer processing time)
+        consumer = JobQueueConsumer(queue_name=queue_name, visibility_timeout=600)
 
         message_count = 0
-        for message in messages:
+        for job_message in consumer.receive_messages(max_messages=1):
             message_count += 1
-            print(f"Processing message: {message.id}")
+            print(f"Processing message: {job_message.raw_message.id}")
 
             try:
-                job_id = process_queue_message(message.content)
-                print(f"Processing job ID: {job_id}")
+                print(f"Processing job ID: {job_message.job_id}")
 
-                process_chunking_job(job_id)
+                process_chunking_job(job_message.job_id)
 
                 # Delete the message after successful processing
-                queue_client.delete_message(message)
-                print(f"Message {message.id} deleted from queue")
+                consumer.delete_message(job_message)
+                print(f"Message {job_message.raw_message.id} deleted from queue")
 
             except Exception as e:
-                print(f"Error processing message {message.id}: {e}", file=sys.stderr)
+                print(f"Error processing message {job_message.raw_message.id}: {e}", file=sys.stderr)
                 traceback.print_exc()
                 # Message will become visible again after visibility_timeout expires
                 raise

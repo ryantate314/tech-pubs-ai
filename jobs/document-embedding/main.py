@@ -1,42 +1,14 @@
-import json
 import os
 import sys
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential
-from azure.storage.queue import QueueClient
-
 from techpubs_core import (
     DocumentChunk,
     DocumentJob,
+    JobQueueConsumer,
     get_session,
 )
 from techpubs_core.embeddings import generate_embeddings_batch, get_embedding_model
-
-
-def get_credential() -> DefaultAzureCredential:
-    """Create a credential using managed identity."""
-    client_id = os.environ.get("AZURE_CLIENT_ID")
-    if not client_id:
-        print("WARNING: AZURE_CLIENT_ID not set. Managed identity authentication may fail for user-assigned identities.")
-    return DefaultAzureCredential(managed_identity_client_id=client_id)
-
-
-def get_queue_client() -> QueueClient:
-    """Create a QueueClient for the embedding job queue using managed identity."""
-    credential = get_credential()
-    queue_url = os.environ.get("STORAGE_QUEUE_URL")
-    queue_name = os.environ.get("QUEUE_NAME")
-
-    if not queue_url or not queue_name:
-        raise ValueError("STORAGE_QUEUE_URL and QUEUE_NAME environment variables must be set")
-
-    account_url = queue_url.rstrip("/")
-    return QueueClient(
-        account_url=account_url,
-        queue_name=queue_name,
-        credential=credential,
-    )
 
 
 def process_embedding_job(job_id: int) -> None:
@@ -120,49 +92,33 @@ def process_embedding_job(job_id: int) -> None:
             raise
 
 
-def process_queue_message(message_content: str) -> int:
-    """
-    Parse queue message and return the job ID.
-
-    Expected message format: {"job_id": 123}
-    """
-    try:
-        data = json.loads(message_content)
-        job_id = data.get("job_id")
-        if not job_id:
-            raise ValueError("Message missing 'job_id' field")
-        return int(job_id)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in queue message: {e}")
-
-
 def main():
     print("Document embedding job started")
 
     try:
-        queue_client = get_queue_client()
+        queue_name = os.environ.get("QUEUE_NAME")
+        if not queue_name:
+            raise ValueError("QUEUE_NAME environment variable must be set")
 
-        # Receive messages from the queue
-        # visibility_timeout ensures the message is hidden from other consumers while processing
-        messages = queue_client.receive_messages(visibility_timeout=300, max_messages=1)
+        # Use 300s visibility timeout for embedding jobs
+        consumer = JobQueueConsumer(queue_name=queue_name, visibility_timeout=300)
 
         message_count = 0
-        for message in messages:
+        for job_message in consumer.receive_messages(max_messages=1):
             message_count += 1
-            print(f"Processing message: {message.id}")
+            print(f"Processing message: {job_message.raw_message.id}")
 
             try:
-                job_id = process_queue_message(message.content)
-                print(f"Processing job ID: {job_id}")
+                print(f"Processing job ID: {job_message.job_id}")
 
-                process_embedding_job(job_id)
+                process_embedding_job(job_message.job_id)
 
                 # Delete the message after successful processing
-                queue_client.delete_message(message)
-                print(f"Message {message.id} deleted from queue")
+                consumer.delete_message(job_message)
+                print(f"Message {job_message.raw_message.id} deleted from queue")
 
             except Exception as e:
-                print(f"Error processing message {message.id}: {e}", file=sys.stderr)
+                print(f"Error processing message {job_message.raw_message.id}: {e}", file=sys.stderr)
                 # Message will become visible again after visibility_timeout expires
                 raise
 

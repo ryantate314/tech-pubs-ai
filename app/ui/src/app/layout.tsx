@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AeroDocs - Technical Publications",
+  title: "Cirrus Technical Publications",
   description: "Browse and search aircraft technical publications",
 };
 

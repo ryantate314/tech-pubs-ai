@@ -4,7 +4,7 @@ from functools import lru_cache
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.azure import AzureProvider
 from openai import AsyncAzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
@@ -83,7 +83,7 @@ def _create_search_agent() -> Agent[SearchAgentDeps, SearchAgentOutput]:
     provider = AzureProvider(openai_client=azure_client)
 
     # Create the model using OpenAIModel with the Azure provider
-    model = OpenAIModel(
+    model = OpenAIChatModel(
         settings.azure_openai_deployment,
         provider=provider,
     )

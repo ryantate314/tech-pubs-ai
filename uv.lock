@@ -701,25 +701,21 @@ name = "document-chunking"
 version = "0.1.0"
 source = { virtual = "jobs/document-chunking" }
 dependencies = [
-    { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "azure-storage-blob", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "docling", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "docling-core", extra = ["chunking-openai"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "pymupdf", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "techpubs-core", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "techpubs-core", extra = ["queue"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "tiktoken", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-identity", specifier = ">=1.19.0" },
     { name = "azure-storage-blob", specifier = ">=12.24.0" },
-    { name = "azure-storage-queue", specifier = ">=12.0.0" },
     { name = "docling", specifier = ">=2.0" },
     { name = "docling-core", extras = ["chunking-openai"] },
     { name = "pymupdf", specifier = ">=1.24.0" },
-    { name = "techpubs-core", editable = "packages/techpubs-core" },
+    { name = "techpubs-core", extras = ["queue"], editable = "packages/techpubs-core" },
     { name = "tiktoken", specifier = ">=0.7.0" },
 ]
 
@@ -728,17 +724,11 @@ name = "document-embedding"
 version = "0.1.0"
 source = { virtual = "jobs/document-embedding" }
 dependencies = [
-    { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "techpubs-core", extra = ["embeddings"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "techpubs-core", extra = ["embeddings", "queue"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "azure-identity", specifier = ">=1.19.0" },
-    { name = "azure-storage-queue", specifier = ">=12.0.0" },
-    { name = "techpubs-core", extras = ["embeddings"], editable = "packages/techpubs-core" },
-]
+requires-dist = [{ name = "techpubs-core", extras = ["embeddings", "queue"], editable = "packages/techpubs-core" }]
 
 [[package]]
 name = "docutils"
@@ -3470,44 +3460,46 @@ embeddings = [
     { name = "openai", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "tenacity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
+queue = [
+    { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "azure-identity", marker = "extra == 'embeddings'", specifier = ">=1.15.0" },
+    { name = "azure-identity", marker = "extra == 'queue'", specifier = ">=1.15.0" },
+    { name = "azure-storage-queue", marker = "extra == 'queue'", specifier = ">=12.9.0" },
     { name = "openai", marker = "extra == 'embeddings'", specifier = ">=1.12.0" },
     { name = "pgvector", specifier = ">=0.3.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "tenacity", marker = "extra == 'embeddings'", specifier = ">=8.0" },
 ]
-provides-extras = ["embeddings"]
+provides-extras = ["embeddings", "queue"]
 
 [[package]]
 name = "techpubsai"
 version = "0.1.0"
 source = { virtual = "app/api" }
 dependencies = [
-    { name = "azure-identity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "azure-storage-blob", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "azure-storage-queue", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "fastapi", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "openai", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "pydantic-ai", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "pydantic-settings", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "techpubs-core", extra = ["embeddings"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "techpubs-core", extra = ["embeddings", "queue"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "uvicorn", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-identity", specifier = ">=1.15.0" },
     { name = "azure-storage-blob", specifier = ">=12.19.0" },
-    { name = "azure-storage-queue", specifier = ">=12.9.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "openai", specifier = ">=1.12.0" },
     { name = "pydantic-ai", specifier = ">=0.1.0" },
     { name = "pydantic-settings", specifier = ">=2.2.0" },
-    { name = "techpubs-core", extras = ["embeddings"], editable = "packages/techpubs-core" },
+    { name = "techpubs-core", extras = ["embeddings", "queue"], editable = "packages/techpubs-core" },
     { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 

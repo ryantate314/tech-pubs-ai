@@ -37,6 +37,28 @@ def _get_client() -> AzureOpenAI:
     )
 
 
+def _sanitize_text(text: str) -> str:
+    """Sanitize text for the OpenAI embedding API.
+
+    Removes null bytes, control characters, and normalizes whitespace.
+    """
+    import re
+
+    # Remove null bytes
+    text = text.replace('\x00', '')
+
+    # Remove control characters (ASCII 0-31) except tab, newline, carriage return
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
+
+    # Remove invalid Unicode surrogates
+    text = text.encode('utf-8', errors='ignore').decode('utf-8')
+
+    # Normalize whitespace (collapse multiple spaces/newlines)
+    text = ' '.join(text.split())
+
+    return text
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
 def _embed(texts: list[str]) -> list[list[float]]:
     """Generate embeddings using Azure OpenAI API."""
@@ -45,10 +67,21 @@ def _embed(texts: list[str]) -> list[list[float]]:
     client = _get_client()
     deployment = _get_deployment()
 
+    # Sanitize inputs to avoid API errors
+    sanitized_texts = [_sanitize_text(t) for t in texts]
+
+    # Filter out empty strings and track their positions
+    non_empty_indices = set(i for i, t in enumerate(sanitized_texts) if t.strip())
+    non_empty_texts = [sanitized_texts[i] for i in sorted(non_empty_indices)]
+
+    if not non_empty_texts:
+        # All texts were empty, return zero vectors
+        return [[0.0] * EMBEDDING_DIMENSION for _ in texts]
+
     try:
         start_time = time.perf_counter()
         response = client.embeddings.create(
-            input=texts,
+            input=non_empty_texts,
             model=deployment,
             dimensions=EMBEDDING_DIMENSION
         )
@@ -56,7 +89,7 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
         # Log timing and token usage
         tokens_used = response.usage.total_tokens if response.usage else "unknown"
-        print(f"DEBUG: Embedding API call took {elapsed_ms:.2f}ms for {len(texts)} texts ({tokens_used} tokens)")
+        print(f"DEBUG: Embedding API call took {elapsed_ms:.2f}ms for {len(non_empty_texts)} texts ({tokens_used} tokens)")
 
         # Log rate limit headers if available
         if hasattr(response, '_response') and response._response:
@@ -71,7 +104,20 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
     # Sort by index to ensure correct order
     sorted_data = sorted(response.data, key=lambda x: x.index)
-    return [item.embedding for item in sorted_data]
+    api_embeddings = [item.embedding for item in sorted_data]
+
+    # Map embeddings back to original positions, using zero vectors for empty texts
+    zero_vector = [0.0] * EMBEDDING_DIMENSION
+    result = []
+    api_idx = 0
+    for i in range(len(texts)):
+        if i in non_empty_indices:
+            result.append(api_embeddings[api_idx])
+            api_idx += 1
+        else:
+            result.append(zero_vector)
+
+    return result
 
 
 def generate_embedding(text: str) -> list[float]:

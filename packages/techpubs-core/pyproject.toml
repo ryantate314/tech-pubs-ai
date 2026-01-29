@@ -19,6 +19,10 @@ embeddings = [
     "tenacity>=8.0",
     "azure-identity>=1.15.0",
 ]
+queue = [
+    "azure-identity>=1.15.0",
+    "azure-storage-queue>=12.9.0",
+]
 
 [build-system]
 requires = ["hatchling"]
