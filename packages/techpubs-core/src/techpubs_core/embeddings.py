@@ -126,6 +126,66 @@ def generate_embedding(text: str) -> list[float]:
     return embeddings[0]
 
 
+def generate_embedding_cached(text: str, session) -> list[float]:
+    """Generate embedding with PostgreSQL caching.
+
+    Checks the embedding_cache table before calling the embedding API.
+    If a cached embedding exists and hasn't expired, returns it directly.
+    Otherwise, generates a new embedding and caches it.
+
+    Args:
+        text: The text to generate an embedding for.
+        session: SQLAlchemy session for database operations.
+
+    Returns:
+        List of floats representing the embedding vector.
+    """
+    import hashlib
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from .models import EmbeddingCache
+
+    # Sanitize text before hashing (same sanitization as _embed)
+    sanitized = _sanitize_text(text)
+    text_hash = hashlib.sha256(sanitized.encode()).hexdigest()
+
+    # Check cache
+    cached = session.execute(
+        select(EmbeddingCache.embedding)
+        .where(EmbeddingCache.text_hash == text_hash)
+        .where(EmbeddingCache.expires_at > datetime.utcnow())
+    ).scalar()
+
+    if cached is not None:
+        return cached.tolist()
+
+    # Generate fresh embedding
+    embedding = _embed([sanitized])[0]
+
+    # Store in cache (30 day TTL)
+    expires_at = datetime.utcnow() + timedelta(days=30)
+    stmt = pg_insert(EmbeddingCache).values(
+        text_hash=text_hash,
+        embedding=embedding,
+        created_at=datetime.utcnow(),
+        expires_at=expires_at,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["text_hash"],
+        set_={
+            "embedding": embedding,
+            "expires_at": expires_at,
+        },
+    )
+    session.execute(stmt)
+    session.commit()
+
+    return embedding
+
+
 def generate_embeddings_batch(
     texts: list[str],
     batch_size: int = 32,

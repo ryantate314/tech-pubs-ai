@@ -2,7 +2,6 @@ export interface SearchRequest {
   query: string;
   limit?: number;
   min_similarity?: number;
-  aircraft_model_id?: number;
 }
 
 export interface ChunkResult {

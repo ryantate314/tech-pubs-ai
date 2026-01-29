@@ -1,14 +1,35 @@
 import os
 import sys
 from datetime import datetime
+from uuid import uuid4
+
+from sqlalchemy import update
 
 from techpubs_core import (
+    CorpusVersion,
     DocumentChunk,
     DocumentJob,
     JobQueueConsumer,
     get_session,
 )
 from techpubs_core.embeddings import generate_embeddings_batch, get_embedding_model
+
+
+def invalidate_search_cache(session) -> str:
+    """Invalidate the search cache by updating the corpus version.
+
+    Returns:
+        The new corpus version string.
+    """
+    new_version = uuid4().hex[:8]
+    session.execute(
+        update(CorpusVersion)
+        .where(CorpusVersion.id == 1)
+        .values(version=new_version, updated_at=datetime.utcnow())
+    )
+    session.commit()
+    print(f"Search cache invalidated, new corpus version: {new_version}")
+    return new_version
 
 
 def process_embedding_job(job_id: int) -> None:
@@ -81,6 +102,10 @@ def process_embedding_job(job_id: int) -> None:
             # Mark job as completed
             job.status = "completed"
             job.completed_at = datetime.now()
+            session.commit()
+
+            # Invalidate search cache since new embeddings are available
+            invalidate_search_cache(session)
 
             print(f"Successfully processed embedding job {job_id}")
             print(f"  - Chunks embedded: {len(chunks)}")

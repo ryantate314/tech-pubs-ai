@@ -1,9 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { AircraftModel } from "@/types/aircraft-models";
+import { useEffect, useRef, useState } from "react";
 import type { ChunkResult } from "@/types/search";
-import { fetchAircraftModels } from "@/lib/api/aircraft-models";
 import { searchDocuments } from "@/lib/api/search";
 import { SearchInput } from "./SearchInput";
 import { SearchResults } from "./SearchResults";
@@ -13,26 +11,12 @@ interface SearchContainerProps {
 }
 
 export function SearchContainer({ initialQuery }: SearchContainerProps) {
-  const [aircraftModels, setAircraftModels] = useState<AircraftModel[]>([]);
   const [results, setResults] = useState<ChunkResult[]>([]);
   const [query, setQuery] = useState(initialQuery || "");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasAutoSearched = useRef(false);
-
-  const loadFilterData = useCallback(async () => {
-    try {
-      const aircraftModelsData = await fetchAircraftModels();
-      setAircraftModels(aircraftModelsData);
-    } catch (err) {
-      console.error("Failed to load filter data:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadFilterData();
-  }, [loadFilterData]);
 
   // Auto-search on mount if initialQuery is provided
   useEffect(() => {
@@ -42,10 +26,7 @@ export function SearchContainer({ initialQuery }: SearchContainerProps) {
     }
   }, [initialQuery]);
 
-  const handleSearch = async (
-    searchQuery: string,
-    aircraftModelId?: number
-  ) => {
+  const handleSearch = async (searchQuery: string) => {
     setIsLoading(true);
     setError(null);
     setQuery(searchQuery);
@@ -54,7 +35,6 @@ export function SearchContainer({ initialQuery }: SearchContainerProps) {
     try {
       const response = await searchDocuments({
         query: searchQuery,
-        aircraft_model_id: aircraftModelId,
         limit: 10,
         min_similarity: 0.5,
       });
@@ -71,7 +51,6 @@ export function SearchContainer({ initialQuery }: SearchContainerProps) {
     <div className="space-y-8">
       <SearchInput
         onSearch={handleSearch}
-        aircraftModels={aircraftModels}
         isLoading={isLoading}
         initialQuery={initialQuery}
       />

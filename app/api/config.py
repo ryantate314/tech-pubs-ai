@@ -15,5 +15,10 @@ class Settings(BaseSettings):
     azure_openai_deployment: str = "gpt-4o"
     agent_search_max_iterations: int = 2  # Keep latency under 5s
 
+    # Search caching
+    cache_enabled: bool = True
+    cache_result_ttl_seconds: int = 604800  # 7 days
+    cache_embedding_ttl_seconds: int = 2592000  # 30 days
+
 
 settings = Settings()

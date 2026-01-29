@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from techpubs_core.database import get_session
 from techpubs_core.models import AircraftModel, Document, DocumentCategory, DocumentChunk, DocumentType, DocumentSerialRange, DocumentVersion, DocumentJob
 
+from config import settings
 from schemas.documents import (
     DocumentDetailResponse,
     DocumentDownloadUrlResponse,
@@ -18,6 +19,7 @@ from schemas.documents import (
     SerialRangeResponse,
 )
 from services.azure_storage import azure_storage_service
+from services.cache_service import SearchCacheService
 from services.queue_service import queue_service
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -285,6 +287,10 @@ def update_document(guid: str, request: DocumentUpdateRequest) -> DocumentDetail
 
         session.commit()
 
+        # Invalidate search cache since document metadata changed
+        if settings.cache_enabled:
+            SearchCacheService(session).invalidate_corpus()
+
         # Fetch updated data for response
         # Get aircraft model name if exists
         aircraft_model_name = None
@@ -423,6 +429,10 @@ def delete_document(guid: str) -> None:
 
         document.deleted_at = func.now()
         session.commit()
+
+        # Invalidate search cache since document was deleted
+        if settings.cache_enabled:
+            SearchCacheService(session).invalidate_corpus()
 
 
 @router.post("/{guid}/reprocess", response_model=ReprocessResponse)

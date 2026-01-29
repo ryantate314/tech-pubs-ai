@@ -8,6 +8,7 @@ from techpubs_core.embeddings import generate_embedding
 
 from config import settings
 from schemas.search import ChunkResult, SearchRequest, SearchResponse
+from services.cache_service import SearchCacheService
 from services.search_agent import (
     get_search_agent,
     SearchAgentDeps,
@@ -20,7 +21,6 @@ async def _fallback_search(
     query: str,
     limit: int,
     min_similarity: float,
-    aircraft_model_id: int | None,
 ) -> list[ChunkResult]:
     """Fallback to simple vector search if agent fails."""
     query_embedding = generate_embedding(query)
@@ -44,6 +44,8 @@ async def _fallback_search(
               AND dv.deleted_at IS NULL
               AND d.deleted_at IS NULL
               AND 1 - (dc.embedding <=> CAST(:query_embedding AS vector)) >= :min_similarity
+            ORDER BY similarity DESC
+            LIMIT :limit
         """
 
         params = {
@@ -51,12 +53,6 @@ async def _fallback_search(
             "min_similarity": min_similarity,
             "limit": limit,
         }
-
-        if aircraft_model_id is not None:
-            sql += " AND d.aircraft_model_id = :aircraft_model_id"
-            params["aircraft_model_id"] = aircraft_model_id
-
-        sql += " ORDER BY similarity DESC LIMIT :limit"
 
         result = session.execute(text(sql), params)
         rows = result.fetchall()
@@ -77,6 +73,62 @@ async def _fallback_search(
         ]
 
 
+async def _execute_agent_search(
+    request: SearchRequest,
+    session,
+) -> SearchResponse:
+    """Execute the agent-based search."""
+    agent = get_search_agent()
+
+    deps = SearchAgentDeps(
+        session=session,
+        original_query=request.query,
+        min_similarity=request.min_similarity,
+        max_results=request.limit,
+    )
+
+    # Run the agent with usage limits to prevent runaway iterations
+    # request_limit of max_iterations + 1 allows for the final response
+    result = await agent.run(
+        f"Find relevant passages for: {request.query}",
+        deps=deps,
+        usage_limits=UsageLimits(
+            request_limit=settings.agent_search_max_iterations + 1
+        ),
+    )
+
+    print(f"Agent returned {len(result.output.results)} results")
+
+    # Sort by similarity descending and limit results
+    sorted_results = sorted(
+        result.output.results,
+        key=lambda p: p.similarity,
+        reverse=True,
+    )[: request.limit]
+
+    # Map agent output to existing response schema
+    chunk_results = [
+        ChunkResult(
+            id=p.chunk_id,
+            content=p.content,
+            summary=p.content,  # Agent returns cleaned content
+            page_number=p.page_number,
+            chapter_title=p.chapter_title,
+            document_guid=p.document_guid,
+            document_name=p.document_name,
+            aircraft_model_name=p.aircraft_model_name,
+            similarity=p.similarity,
+        )
+        for p in sorted_results
+    ]
+
+    return SearchResponse(
+        query=request.query,
+        results=chunk_results,
+        total_found=len(chunk_results),
+    )
+
+
 @router.post("", response_model=SearchResponse)
 async def search_documents(request: SearchRequest) -> SearchResponse:
     """
@@ -86,71 +138,56 @@ async def search_documents(request: SearchRequest) -> SearchResponse:
     - Executes vector searches (potentially with reformulated queries)
     - Evaluates and filters results for relevance
     - Returns clean, human-readable passages
+
+    Results are cached based on query parameters and corpus version.
     """
-    agent = get_search_agent()
-
-    try:
-        with get_session() as session:
-            deps = SearchAgentDeps(
-                session=session,
-                original_query=request.query,
-                aircraft_model_id=request.aircraft_model_id,
-                min_similarity=request.min_similarity,
-                max_results=request.limit,
+    with get_session() as session:
+        # Check cache if enabled
+        if settings.cache_enabled:
+            cache_service = SearchCacheService(
+                session,
+                result_ttl_seconds=settings.cache_result_ttl_seconds,
+                embedding_ttl_seconds=settings.cache_embedding_ttl_seconds,
+            )
+            corpus_version = cache_service.get_corpus_version()
+            cache_key = cache_service.build_cache_key(
+                request.query,
+                request.limit,
+                request.min_similarity,
+                corpus_version,
             )
 
-            # Run the agent with usage limits to prevent runaway iterations
-            # request_limit of max_iterations + 1 allows for the final response
-            result = await agent.run(
-                f"Find relevant passages for: {request.query}",
-                deps=deps,
-                usage_limits=UsageLimits(
-                    request_limit=settings.agent_search_max_iterations + 1
-                ),
+            # Check for cached result
+            cached = cache_service.get_cached_result(cache_key)
+            if cached:
+                print(f"Cache hit for query: {request.query[:50]}...")
+                return SearchResponse(**cached)
+
+            print(f"Cache miss for query: {request.query[:50]}...")
+
+        # Execute search
+        try:
+            response = await _execute_agent_search(request, session)
+        except Exception as e:
+            print(f"Agent search failed, falling back to simple search: {e}")
+            results = await _fallback_search(
+                request.query,
+                request.limit,
+                request.min_similarity,
             )
-
-            print(f"Agent returned {len(result.output.results)} results")
-
-            # Sort by similarity descending and limit results
-            sorted_results = sorted(
-                result.output.results,
-                key=lambda p: p.similarity,
-                reverse=True,
-            )[: request.limit]
-
-            # Map agent output to existing response schema
-            chunk_results = [
-                ChunkResult(
-                    id=p.chunk_id,
-                    content=p.content,
-                    summary=p.content,  # Agent returns cleaned content
-                    page_number=p.page_number,
-                    chapter_title=p.chapter_title,
-                    document_guid=p.document_guid,
-                    document_name=p.document_name,
-                    aircraft_model_name=p.aircraft_model_name,
-                    similarity=p.similarity,
-                )
-                for p in sorted_results
-            ]
-
-            return SearchResponse(
+            response = SearchResponse(
                 query=request.query,
-                results=chunk_results,
-                total_found=len(chunk_results),
+                results=results,
+                total_found=len(results),
             )
 
-    except Exception as e:
-        print(f"Agent search failed, falling back to simple search: {e}")
-        # Fall back to simple vector search
-        results = await _fallback_search(
-            request.query,
-            request.limit,
-            request.min_similarity,
-            request.aircraft_model_id,
-        )
-        return SearchResponse(
-            query=request.query,
-            results=results,
-            total_found=len(results),
-        )
+        # Cache the result
+        if settings.cache_enabled:
+            cache_service.cache_result(
+                cache_key,
+                request.query,
+                response.model_dump(),
+                corpus_version,
+            )
+
+        return response

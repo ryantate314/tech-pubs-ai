@@ -7,7 +7,6 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query text")
     limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results")
     min_similarity: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum similarity threshold")
-    aircraft_model_id: Optional[int] = Field(default=None, description="Filter by aircraft model ID")
 
 
 class ChunkResult(BaseModel):

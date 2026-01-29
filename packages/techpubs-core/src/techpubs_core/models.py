@@ -3,7 +3,8 @@ from typing import Optional
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -190,3 +191,32 @@ class DocumentSerialRange(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
 
     document: Mapped["Document"] = relationship(back_populates="serial_ranges")
+
+
+class EmbeddingCache(Base):
+    __tablename__ = "embedding_cache"
+
+    text_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    embedding = mapped_column(Vector(1536), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SearchCache(Base):
+    __tablename__ = "search_cache"
+
+    cache_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    response: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    corpus_version: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CorpusVersion(Base):
+    __tablename__ = "corpus_version"
+    __table_args__ = (CheckConstraint("id = 1", name="corpus_version_single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)

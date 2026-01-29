@@ -10,6 +10,5 @@ class SearchAgentDeps:
 
     session: Session
     original_query: str
-    aircraft_model_id: int | None = None
     min_similarity: float = 0.5
     max_results: int = 10

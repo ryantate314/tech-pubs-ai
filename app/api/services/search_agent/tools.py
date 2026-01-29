@@ -90,11 +90,6 @@ def vector_search(
         "limit": effective_limit,
     }
 
-    # Add optional aircraft model filter
-    if deps.aircraft_model_id is not None:
-        sql += " AND d.aircraft_model_id = :aircraft_model_id"
-        params["aircraft_model_id"] = deps.aircraft_model_id
-
     sql += " ORDER BY similarity DESC LIMIT :limit"
 
     result = deps.session.execute(text(sql), params)

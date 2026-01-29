@@ -1,33 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import type { AircraftModel } from "@/types/aircraft-models";
 
 interface SearchInputProps {
-  onSearch: (
-    query: string,
-    aircraftModelId?: number
-  ) => void;
-  aircraftModels: AircraftModel[];
+  onSearch: (query: string) => void;
   isLoading: boolean;
   initialQuery?: string;
 }
 
 export function SearchInput({
   onSearch,
-  aircraftModels,
   isLoading,
   initialQuery,
 }: SearchInputProps) {
   const [query, setQuery] = useState(initialQuery || "");
-  const [aircraftModelId, setAircraftModelId] = useState<number | undefined>(
-    undefined
-  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      onSearch(query.trim(), aircraftModelId);
+      onSearch(query.trim());
     }
   };
 
@@ -55,35 +46,6 @@ export function SearchInput({
         >
           {isLoading ? "Searching..." : "Search"}
         </button>
-      </div>
-
-      <div className="flex gap-4">
-        <div className="w-48">
-          <label
-            htmlFor="aircraft-model-filter"
-            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Aircraft Model
-          </label>
-          <select
-            id="aircraft-model-filter"
-            value={aircraftModelId ?? ""}
-            onChange={(e) =>
-              setAircraftModelId(
-                e.target.value ? Number(e.target.value) : undefined
-              )
-            }
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-            disabled={isLoading}
-          >
-            <option value="">All Aircraft</option>
-            {aircraftModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.code} - {model.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
     </form>
   );
